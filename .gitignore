@@ -53,3 +53,9 @@ dkms.conf
 
 # ESP-idf build folder
 build/
+
+# Vscode config folder
+.vscode/c_cpp_properties.json
+.vscode/launch.json
+.vscode/settings.json
+.vscode/tasks.json
