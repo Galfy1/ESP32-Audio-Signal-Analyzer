@@ -55,7 +55,11 @@ dkms.conf
 build/
 
 # Vscode config folder
+.vscode/
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/settings.json
 .vscode/tasks.json
+
+# sdkconfig.old file. I think its just a backup file, aka we dont care about it in git
+sdkconfig.old
