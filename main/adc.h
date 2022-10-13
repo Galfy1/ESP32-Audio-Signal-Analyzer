@@ -3,6 +3,8 @@
 
 
 
+void adc_init();
+
 
 
 #endif /*ADC_H_INCLUDED */
