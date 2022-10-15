@@ -13,11 +13,15 @@ static const char *ADC_TAG = "ADC.C";
 
 #define CONV_FRAME_SIZE     256  // In bytes
 #define ADC_CONV_MODE       ADC_CONV_BOTH_UNIT
+#define ADC_ATTEN_DB        ADC_ATTEN_DB_2_5
 
 #define RES_BUFFER_SIZE 4096        // VÆRDIEN SKAL NOK PASSER MED DEN FFT STØRELSE VI VÆLGER. DEN SKAL NOK VÆRE DEFINED ET STED. 
                                         // LIGE NU BRUGER JEG BARE 4096 TIL TEST
-uint16_t au16_adc1_buf[RES_BUFFER_SIZE] = {0};  
-uint16_t au16_adc2_buf[RES_BUFFER_SIZE] = {0};  
+uint16_t au16_adc1_shared[RES_BUFFER_SIZE] = {0};  
+uint16_t au16_adc2_shared[RES_BUFFER_SIZE] = {0};  
+
+uint16_t au16_adc1_temp_buf[RES_BUFFER_SIZE] = {0};  
+uint16_t au16_adc2_temp_buf[RES_BUFFER_SIZE] = {0};  
 
 
 
@@ -98,10 +102,14 @@ static bool check_valid_data(const adc_digi_output_data_t *data)
 void adc_task()
 {
     adc_continuous_handle_t adc_handle = NULL;
+    adc_cali_handle_t adc_cali_handle = NULL;
     esp_err_t ret;
     uint32_t ret_num = 0;       
     uint8_t result[CONV_FRAME_SIZE] = {0};
     memset(result, 0xcc, CONV_FRAME_SIZE);  // ikke sikker på hvorfor vi sætter dem til 0xcc (0b11001100)
+
+    int32_t i32_adc1_idx_counter = 0;
+    int32_t i32_adc2_idx_counter = 0;
 
     adc_task_handle = xTaskGetCurrentTaskHandle();
 
@@ -122,12 +130,12 @@ void adc_task()
     adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX] = {0};
     dig_cfg.pattern_num = 2;
 
-    adc_pattern[0].atten = ADC_ATTEN_DB_2_5;
+    adc_pattern[0].atten = ADC_ATTEN_DB;
     adc_pattern[0].channel = ADC_CHANNEL_0; //GPIO 1
     adc_pattern[0].unit = ADC_UNIT_1;    //ADC 1
     adc_pattern[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
-    adc_pattern[1].atten = ADC_ATTEN_DB_2_5;
+    adc_pattern[1].atten = ADC_ATTEN_DB;
     adc_pattern[1].channel = ADC_CHANNEL_9; // GPIO 20
     adc_pattern[1].unit = ADC_UNIT_2;    // ADC 2
     adc_pattern[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
@@ -143,10 +151,24 @@ void adc_task()
     ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 
+    // ADC calibration:
+    adc_cali_curve_fitting_config_t cali_config_1 = {
+        .unit_id = ADC_UNIT_1 ,
+        .atten = ADC_ATTEN_DB,
+        .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
+    };
+    adc_cali_curve_fitting_config_t cali_config_2 = {
+        .unit_id = ADC_UNIT_2 ,
+        .atten = ADC_ATTEN_DB,
+        .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
+    };
+    ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_1, &adc_cali_handle));
+    ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_2, &adc_cali_handle));
+    // SKAL BRUGE adc_cali_raw_to_voltage()
 
-    // for test
-    int32_t testCounterADC1 = 0;
-    int32_t testCounterADC2 = 0;
+    // // for samping rate validation:
+    // int32_t testCounterADC1 = 0;
+    // int32_t testCounterADC2 = 0;
   
 
     while(1)
@@ -163,13 +185,49 @@ void adc_task()
                 {
                     adc_digi_output_data_t *p_conv_res = (void*)&result[i]; // make a pointer for each conversion result of type adc_digi_output_data_t so its associated variables can be accessed
                     if (check_valid_data(p_conv_res)) {
-                        ESP_LOGI(ADC_TAG, "Unit: %d,_Channel: %d, Value: %x", p_conv_res->type2.unit+1, p_conv_res->type2.channel, p_conv_res->type2.data);
+                        //ESP_LOGI(ADC_TAG, "Unit: %d,_Channel: %d, Value: %x", p_conv_res->type2.unit+1, p_conv_res->type2.channel, p_conv_res->type2.data);
+
+                        if(p_conv_res->type2.unit == ADC_UNIT_1)
+                        {
+                            au16_adc1_temp_buf[i32_adc1_idx_counter] = p_conv_res->type2.data;
+                            i32_adc1_idx_counter++;
+
+                            if(i32_adc1_idx_counter > (RES_BUFFER_SIZE - 1))  // SKAL LIGE TÆNKE OM DET VIRKER. NÅR DET ENE ER INDEX OG DET ANDET ER STØRELSE
+                            {
+                                i32_adc1_idx_counter =  0;
+                                // Tag mutex
+                                memcpy(au16_adc1_shared, au16_adc1_temp_buf, RES_BUFFER_SIZE);
+                                // aflever mutex
+                                // PUT FLAG I DET DER QUEUE;
+                            }
+                        }
+
+                        else if(p_conv_res->type2.unit == ADC_UNIT_2)
+                        {
+                            au16_adc2_temp_buf[i32_adc1_idx_counter] = p_conv_res->type2.data;
+                            i32_adc2_idx_counter++;
+
+                            if(i32_adc2_idx_counter > (RES_BUFFER_SIZE -1)) 
+                            {
+                                i32_adc2_idx_counter = 0;
+                                memcpy(au16_adc2_shared, au16_adc2_temp_buf, RES_BUFFER_SIZE);
+                                 // PUT FLAG I DET DER QUEUE;
+                            }
+                        }
+
+
+
+
+
+
+                        // Sampling rate validation:
                         // if(p_conv_res->type2.unit == ADC_UNIT_1)
                         // {
                         //     testCounterADC1++;
-                        //     if(testCounterADC1 >= 80)
+                        //     if(testCounterADC1 >= 40000)
                         //     {
-                        //         ESP_LOGI(ADC_TAG, "ADC 1 80k");
+                        //         //ESP_LOGI(ADC_TAG, "ADC 1 80k");
+                        //         ESP_LOGI(ADC_TAG, "Unit: %d,_Channel: %d, Value: %x", p_conv_res->type2.unit+1, p_conv_res->type2.channel, p_conv_res->type2.data);
                         //         testCounterADC1 = 0;
                         //     }
 
@@ -177,9 +235,10 @@ void adc_task()
                         // else if(p_conv_res->type2.unit == ADC_UNIT_2)
                         // {
                         //     testCounterADC2++;
-                        //     if(testCounterADC2 >= 80)
+                        //     if(testCounterADC2 >= 40000)
                         //     {
-                        //         ESP_LOGI(ADC_TAG, "ADC 2 80k");
+                        //         //ESP_LOGI(ADC_TAG, "ADC 2 80k");
+                        //         ESP_LOGI(ADC_TAG, "Unit: %d,_Channel: %d, Value: %x", p_conv_res->type2.unit+1, p_conv_res->type2.channel, p_conv_res->type2.data);
                         //         testCounterADC2 = 0;
                         //     }
                         // }
@@ -194,7 +253,7 @@ void adc_task()
                  * To avoid a task watchdog timeout, add a delay here. When you replace the way you process the data,
                  * usually you don't need this delay (as this task will block for a while).
                  */
-                vTaskDelay(1);
+                //vTaskDelay(1);
             }
             else if (ret == ESP_ERR_TIMEOUT)
              {
@@ -216,8 +275,8 @@ void adc_task()
 // {
 
 //     // JEG KAN NOK IKKE GØRE SÅDAN HER MED POINTERS: DET SKAL NOK VÆRE POINTER POINTER!
-//     pu16_adc_buf_left = au16_adc1_buf;
-//     pu16_adc_buf_right = au16_adc2_buf;
+//     pu16_adc_buf_left = au16_adc1_shared;
+//     pu16_adc_buf_right = au16_adc2_shared;
 //     i32_res_buffer_len = RES_BUFFER_SIZE;
 
 //     //Tasks:
