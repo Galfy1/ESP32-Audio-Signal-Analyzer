@@ -7,84 +7,42 @@
 
 #include "esp_log.h"
 #include "esp_adc/adc_continuous.h"
+#include "esp_adc/adc_cali.h"
+
+#include "adc.h"
+#include "common_defines.h"
 
 static const char *ADC_TAG = "ADC.C";
+
+
+// ADC 1 --> Left mic channel
+// ADC 2 --> Right mic channel
 
 
 #define CONV_FRAME_SIZE     256  // In bytes
 #define ADC_CONV_MODE       ADC_CONV_BOTH_UNIT
 #define ADC_ATTEN_DB        ADC_ATTEN_DB_2_5
 
-#define RES_BUFFER_SIZE 4096        // VÆRDIEN SKAL NOK PASSER MED DEN FFT STØRELSE VI VÆLGER. DEN SKAL NOK VÆRE DEFINED ET STED. 
-                                        // LIGE NU BRUGER JEG BARE 4096 TIL TEST
-uint16_t au16_adc1_shared[RES_BUFFER_SIZE] = {0};  
-uint16_t au16_adc2_shared[RES_BUFFER_SIZE] = {0};  
+#define ADC_INT_TASK_NOTI_INDEX 0 
 
-uint16_t au16_adc1_temp_buf[RES_BUFFER_SIZE] = {0};  
-uint16_t au16_adc2_temp_buf[RES_BUFFER_SIZE] = {0};  
+static uint16_t * gs_pu16_adc1_shared;
+static uint16_t * gs_pu16_adc2_shared;
 
+static TaskHandle_t gs_adc_task_handle;
+static TaskHandle_t gs_dsp_left_ch_task_handle;
+static TaskHandle_t gs_dsp_right_ch_task_handle;
 
-
-static TaskHandle_t adc_task_handle;
-
-// static int32_t i32AmountOfConvResInFrame = CONV_FRAME_SIZE / sizeof(adc_digi_output_data_t);
-// static QueueHandle_t xQueue_ADCDataFromISR;
+static uint16_t gs_au16_adc1_temp_buf[RES_BUFFER_SIZE] = {0};  
+static uint16_t gs_au16_adc2_temp_buf[RES_BUFFER_SIZE] = {0};  
 
 
-// void adc_task()
-// {
-//     TickType_t xDelay500 = 1 / portTICK_PERIOD_MS;
-
-//     for(;;)
-//     {
-
-//         adc_digi_output_data_t p_temp_res;    
-
-//         if(xQueueReceive(xQueue_ADCDataFromISR, (void *)&p_temp_res, (TickType_t)portMAX_DELAY ) == pdPASS)
-//         {
-//             ESP_LOGI(ADC_TAG, "Unit: %d,_Channel: %d, Value: %x", p_temp_res.type2.unit, p_temp_res.type2.channel, p_temp_res.type2.data);
-//         }
-
-
-
-//         // check_valid_data()
-
-//         //ESP_LOGI(ADC_TAG, "WWWWEEEE :D");
-//         vTaskDelay(xDelay500);
-//     }
-// }
-
-// static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t handle, const adc_continuous_evt_data_t *edata, void *user_data)
-// {
-//     BaseType_t mustYield = pdFALSE; // From espressif example
-
-//     BaseType_t xHigherPriorityTaskWoken; // From xQueueSendFromISR(). (I dont use it for anything atm)
-//     xHigherPriorityTaskWoken = pdFALSE;
-
-//     //adc_digi_output_data_t testy[edata->size / sizeof(adc_digi_output_data_t)];
-//    //memcpy(testy, edata->conv_frame_buffer, edata->size);
-
-//     uint8_t u8AmountOfRes = edata->size / sizeof(adc_digi_output_data_t);
-
-//     for(int32_t i = 0 ; i < u8AmountOfRes ; i++)
-//     {
-//         xQueueSendFromISR(xQueue_ADCDataFromISR, (adc_digi_output_data_t *)(edata->conv_frame_buffer), &xHigherPriorityTaskWoken);
-//     }
-
-
-//    // ESP_LOGI(ADC_TAG, "DATA", );
-
-//     //Notify that ADC continuous driver has done enough number of conversions
-//     //vTaskNotifyGiveFromISR(s_task_handle, &mustYield);
-//     return (mustYield == pdTRUE);
-// }
 
 static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t handle, const adc_continuous_evt_data_t *edata, void *user_data)
 {
     BaseType_t mustYield = pdFALSE;
 
     //Notify that ADC continuous driver has done enough number of conversions
-    vTaskNotifyGiveFromISR(adc_task_handle, &mustYield);
+    vTaskNotifyGiveIndexedFromISR(gs_adc_task_handle, ADC_INT_TASK_NOTI_INDEX , &mustYield);
 
     return (mustYield == pdTRUE);
 }
@@ -111,7 +69,7 @@ void adc_task()
     int32_t i32_adc1_idx_counter = 0;
     int32_t i32_adc2_idx_counter = 0;
 
-    adc_task_handle = xTaskGetCurrentTaskHandle();
+    gs_adc_task_handle = xTaskGetCurrentTaskHandle();
 
     // Create ADC handle:
     adc_continuous_handle_cfg_t adc_config = {
@@ -152,29 +110,29 @@ void adc_task()
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 
     // ADC calibration:
-    adc_cali_curve_fitting_config_t cali_config_1 = {
-        .unit_id = ADC_UNIT_1 ,
-        .atten = ADC_ATTEN_DB,
-        .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
-    };
-    adc_cali_curve_fitting_config_t cali_config_2 = {
-        .unit_id = ADC_UNIT_2 ,
-        .atten = ADC_ATTEN_DB,
-        .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
-    };
-    ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_1, &adc_cali_handle));
-    ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_2, &adc_cali_handle));
+    // adc_cali_curve_fitting_config_t cali_config_1 = {
+    //     .unit_id = ADC_UNIT_1 ,
+    //     .atten = ADC_ATTEN_DB,
+    //     .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
+    // };
+    // adc_cali_curve_fitting_config_t cali_config_2 = {
+    //     .unit_id = ADC_UNIT_2 ,
+    //     .atten = ADC_ATTEN_DB,
+    //     .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
+    // };
+    // ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_1, &adc_cali_handle));
+    // ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_2, &adc_cali_handle));
     // SKAL BRUGE adc_cali_raw_to_voltage()
 
     // // for samping rate validation:
-    // int32_t testCounterADC1 = 0;
-    // int32_t testCounterADC2 = 0;
+    int32_t testCounterADC1 = 0;
+    int32_t testCounterADC2 = 0;
   
 
     while(1)
     {
 
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        ulTaskNotifyTakeIndexed(ADC_INT_TASK_NOTI_INDEX, pdTRUE, portMAX_DELAY);  // pdTRUE means clear count on exit
 
         while(1)
         {
@@ -187,40 +145,39 @@ void adc_task()
                     if (check_valid_data(p_conv_res)) {
                         //ESP_LOGI(ADC_TAG, "Unit: %d,_Channel: %d, Value: %x", p_conv_res->type2.unit+1, p_conv_res->type2.channel, p_conv_res->type2.data);
 
+
                         if(p_conv_res->type2.unit == ADC_UNIT_1)
                         {
-                            au16_adc1_temp_buf[i32_adc1_idx_counter] = p_conv_res->type2.data;
+                            gs_au16_adc1_temp_buf[i32_adc1_idx_counter] = p_conv_res->type2.data;
                             i32_adc1_idx_counter++;
 
                             if(i32_adc1_idx_counter > (RES_BUFFER_SIZE - 1))  // SKAL LIGE TÆNKE OM DET VIRKER. NÅR DET ENE ER INDEX OG DET ANDET ER STØRELSE
                             {
                                 i32_adc1_idx_counter =  0;
-                                // Tag mutex
-                                memcpy(au16_adc1_shared, au16_adc1_temp_buf, RES_BUFFER_SIZE);
-                                // aflever mutex
-                                // PUT FLAG I DET DER QUEUE;
+                                ulTaskNotifyTakeIndexed(ADC_LEFT_SHARED_MEM_TASK_NOTI_INDEX, pdTRUE, portMAX_DELAY);  // use task noticiation as a mutex / binary semaphore
+                                memcpy(gs_pu16_adc1_shared, gs_au16_adc1_temp_buf, sizeof(gs_au16_adc1_temp_buf));
+                                xTaskNotifyGiveIndexed(gs_dsp_left_ch_task_handle, ADC_LEFT_SHARED_MEM_TASK_NOTI_INDEX);         // use task noticiation as a mutex / binary semaphore 
                             }
                         }
 
                         else if(p_conv_res->type2.unit == ADC_UNIT_2)
                         {
-                            au16_adc2_temp_buf[i32_adc1_idx_counter] = p_conv_res->type2.data;
+                            gs_au16_adc2_temp_buf[i32_adc1_idx_counter] = p_conv_res->type2.data;
                             i32_adc2_idx_counter++;
 
                             if(i32_adc2_idx_counter > (RES_BUFFER_SIZE -1)) 
                             {
                                 i32_adc2_idx_counter = 0;
-                                memcpy(au16_adc2_shared, au16_adc2_temp_buf, RES_BUFFER_SIZE);
-                                 // PUT FLAG I DET DER QUEUE;
+                                ulTaskNotifyTakeIndexed(ADC_RIGHT_SHARED_MEM_TASK_NOTI_INDEX, pdTRUE, portMAX_DELAY);  // use task noticiation as a mutex / binary semaphore
+                                memcpy(gs_pu16_adc2_shared, gs_au16_adc2_temp_buf, sizeof(gs_au16_adc2_temp_buf));
+                                xTaskNotifyGiveIndexed(gs_dsp_right_ch_task_handle, ADC_RIGHT_SHARED_MEM_TASK_NOTI_INDEX);         // use task noticiation as a mutex / binary semaphore 
                             }
                         }
 
 
 
 
-
-
-                        // Sampling rate validation:
+                        // //Sampling rate validation:
                         // if(p_conv_res->type2.unit == ADC_UNIT_1)
                         // {
                         //     testCounterADC1++;
@@ -242,6 +199,8 @@ void adc_task()
                         //         testCounterADC2 = 0;
                         //     }
                         // }
+
+
                     } else {
                         ESP_LOGI(ADC_TAG, "Invalid data [%d_%d_%x]", p_conv_res->type2.unit+1, p_conv_res->type2.channel, p_conv_res->type2.data);
                     }
@@ -288,9 +247,13 @@ void adc_task()
 // }
 
 
-void adc_init()
+void adc_init(uint16_t * pu16_adc1_shared, uint16_t * pu16_adc2_shared, TaskHandle_t dsp_left_ch_task_handle, TaskHandle_t dsp_right_ch_task_handle)
 {
-    xTaskCreatePinnedToCore(adc_task, "adc_task", 4096, NULL, 2, NULL, 1); // Use core 1 (application core)
+    gs_pu16_adc1_shared = pu16_adc1_shared;
+    gs_pu16_adc2_shared = pu16_adc2_shared;
+
+    gs_dsp_left_ch_task_handle = dsp_left_ch_task_handle;
+    gs_dsp_right_ch_task_handle = dsp_right_ch_task_handle;
 }
 
 
