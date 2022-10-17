@@ -4,6 +4,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "freertos/semphr.h"
 
 #include "esp_log.h"
 #include "esp_adc/adc_continuous.h"
@@ -22,18 +23,22 @@ static const char *ADC_TAG = "ADC.C";
 #define CONV_FRAME_SIZE     256  // In bytes
 #define ADC_CONV_MODE       ADC_CONV_BOTH_UNIT
 #define ADC_ATTEN_DB        ADC_ATTEN_DB_2_5
+#define ADC_SAMPLING_FREQ   80 * 1000               // see soc caps file for max value
 
-#define ADC_INT_TASK_NOTI_INDEX 0 
 
 static uint16_t * gs_pu16_adc1_shared;
 static uint16_t * gs_pu16_adc2_shared;
 
 static TaskHandle_t gs_adc_task_handle;
-static TaskHandle_t gs_dsp_left_ch_task_handle;
-static TaskHandle_t gs_dsp_right_ch_task_handle;
 
 static uint16_t gs_au16_adc1_temp_buf[RES_BUFFER_SIZE] = {0};  
 static uint16_t gs_au16_adc2_temp_buf[RES_BUFFER_SIZE] = {0};  
+
+static SemaphoreHandle_t gs_adc1_shared_mem_sem;   
+static SemaphoreHandle_t gs_adc2_shared_mem_sem;
+
+static TaskHandle_t gs_dsp_left_task_handle;
+static TaskHandle_t gs_dsp_right_task_handle;
 
 
 
@@ -42,7 +47,7 @@ static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t handle, const adc_c
     BaseType_t mustYield = pdFALSE;
 
     //Notify that ADC continuous driver has done enough number of conversions
-    vTaskNotifyGiveIndexedFromISR(gs_adc_task_handle, ADC_INT_TASK_NOTI_INDEX , &mustYield);
+    vTaskNotifyGiveFromISR(gs_adc_task_handle, &mustYield);
 
     return (mustYield == pdTRUE);
 }
@@ -79,7 +84,7 @@ void adc_task()
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
     adc_continuous_config_t dig_cfg = {
-        .sample_freq_hz = 80 * 1000,
+        .sample_freq_hz = ADC_SAMPLING_FREQ,
         .conv_mode = ADC_CONV_MODE,
         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
     };
@@ -94,7 +99,7 @@ void adc_task()
     adc_pattern[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
     adc_pattern[1].atten = ADC_ATTEN_DB;
-    adc_pattern[1].channel = ADC_CHANNEL_9; // GPIO 20
+    adc_pattern[1].channel = ADC_CHANNEL_7; // GPIO 18
     adc_pattern[1].unit = ADC_UNIT_2;    // ADC 2
     adc_pattern[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
@@ -125,14 +130,14 @@ void adc_task()
     // SKAL BRUGE adc_cali_raw_to_voltage()
 
     // // for samping rate validation:
-    int32_t testCounterADC1 = 0;
-    int32_t testCounterADC2 = 0;
+    // int32_t testCounterADC1 = 0;
+    // int32_t testCounterADC2 = 0;
   
 
     while(1)
     {
 
-        ulTaskNotifyTakeIndexed(ADC_INT_TASK_NOTI_INDEX, pdTRUE, portMAX_DELAY);  // pdTRUE means clear count on exit
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // pdTRUE means clear count on exit
 
         while(1)
         {
@@ -154,9 +159,12 @@ void adc_task()
                             if(i32_adc1_idx_counter > (RES_BUFFER_SIZE - 1))  // SKAL LIGE TÆNKE OM DET VIRKER. NÅR DET ENE ER INDEX OG DET ANDET ER STØRELSE
                             {
                                 i32_adc1_idx_counter =  0;
-                                ulTaskNotifyTakeIndexed(ADC_LEFT_SHARED_MEM_TASK_NOTI_INDEX, pdTRUE, portMAX_DELAY);  // use task noticiation as a mutex / binary semaphore
-                                memcpy(gs_pu16_adc1_shared, gs_au16_adc1_temp_buf, sizeof(gs_au16_adc1_temp_buf));
-                                xTaskNotifyGiveIndexed(gs_dsp_left_ch_task_handle, ADC_LEFT_SHARED_MEM_TASK_NOTI_INDEX);         // use task noticiation as a mutex / binary semaphore 
+                                if(xSemaphoreTake(gs_adc1_shared_mem_sem, portMAX_DELAY) == pdTRUE) // Binary sempahore used to mutual exclusion
+                                {
+                                    memcpy(gs_pu16_adc1_shared, gs_au16_adc1_temp_buf, sizeof(gs_au16_adc1_temp_buf));
+                                    xSemaphoreGive(gs_adc1_shared_mem_sem);
+                                    xTaskNotifyGive(gs_dsp_left_task_handle);    // Use direct task notification to syncronize use of the shared memory
+                                }
                             }
                         }
 
@@ -168,9 +176,12 @@ void adc_task()
                             if(i32_adc2_idx_counter > (RES_BUFFER_SIZE -1)) 
                             {
                                 i32_adc2_idx_counter = 0;
-                                ulTaskNotifyTakeIndexed(ADC_RIGHT_SHARED_MEM_TASK_NOTI_INDEX, pdTRUE, portMAX_DELAY);  // use task noticiation as a mutex / binary semaphore
-                                memcpy(gs_pu16_adc2_shared, gs_au16_adc2_temp_buf, sizeof(gs_au16_adc2_temp_buf));
-                                xTaskNotifyGiveIndexed(gs_dsp_right_ch_task_handle, ADC_RIGHT_SHARED_MEM_TASK_NOTI_INDEX);         // use task noticiation as a mutex / binary semaphore 
+                                if(xSemaphoreTake(gs_adc2_shared_mem_sem, portMAX_DELAY) == pdTRUE)
+                                {
+                                    memcpy(gs_pu16_adc2_shared, gs_au16_adc2_temp_buf, sizeof(gs_au16_adc2_temp_buf));
+                                    xSemaphoreGive(gs_adc2_shared_mem_sem);
+                                    xTaskNotifyGive(gs_dsp_right_task_handle);
+                                }
                             }
                         }
 
@@ -246,14 +257,20 @@ void adc_task()
 //     // ER IKKE PÅ MAN KAN GØRE DET DER MED QUEUE HANDLES SOM OUTPUT
 // }
 
+void adc_set_dsp_task_handles(TaskHandle_t dsp_left_task_handle, TaskHandle_t dsp_right_task_handle)
+{
+    gs_dsp_left_task_handle = dsp_left_task_handle;
+    gs_dsp_right_task_handle = dsp_right_task_handle;
+}
 
-void adc_init(uint16_t * pu16_adc1_shared, uint16_t * pu16_adc2_shared, TaskHandle_t dsp_left_ch_task_handle, TaskHandle_t dsp_right_ch_task_handle)
+
+void adc_init(uint16_t * pu16_adc1_shared, uint16_t * pu16_adc2_shared, SemaphoreHandle_t adc1_shared_mem_sem, SemaphoreHandle_t adc2_shared_mem_sem)
 {
     gs_pu16_adc1_shared = pu16_adc1_shared;
     gs_pu16_adc2_shared = pu16_adc2_shared;
 
-    gs_dsp_left_ch_task_handle = dsp_left_ch_task_handle;
-    gs_dsp_right_ch_task_handle = dsp_right_ch_task_handle;
+    gs_adc1_shared_mem_sem = adc1_shared_mem_sem;
+    gs_adc2_shared_mem_sem = adc2_shared_mem_sem;
 }
 
 
