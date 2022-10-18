@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "esp_adc/adc_continuous.h"
 #include "esp_adc/adc_cali.h"
+#include "esp_adc/adc_cali_scheme.h"
 
 #include "adc.h"
 #include "common_defines.h"
@@ -65,10 +66,16 @@ static bool check_valid_data(const adc_digi_output_data_t *data)
 void adc_task()
 {
     adc_continuous_handle_t adc_handle = NULL;
-    adc_cali_handle_t adc_cali_handle = NULL;
+    
+    adc_cali_handle_t adc1_cali_handle = NULL;
+    adc_cali_handle_t adc2_cali_handle = NULL;
+    int adc1_temp_voltage; // int to match the adc_cali_raw_to_voltage() input type
+    int adc2_temp_voltage;
+
     esp_err_t ret;
     uint32_t ret_num = 0;       
     uint8_t result[CONV_FRAME_SIZE] = {0};
+    
     memset(result, 0xcc, CONV_FRAME_SIZE);  // ikke sikker på hvorfor vi sætter dem til 0xcc (0b11001100)
 
     int32_t i32_adc1_idx_counter = 0;
@@ -115,18 +122,18 @@ void adc_task()
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 
     // ADC calibration:
-    // adc_cali_curve_fitting_config_t cali_config_1 = {
-    //     .unit_id = ADC_UNIT_1 ,
-    //     .atten = ADC_ATTEN_DB,
-    //     .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
-    // };
-    // adc_cali_curve_fitting_config_t cali_config_2 = {
-    //     .unit_id = ADC_UNIT_2 ,
-    //     .atten = ADC_ATTEN_DB,
-    //     .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
-    // };
-    // ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_1, &adc_cali_handle));
-    // ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_2, &adc_cali_handle));
+    adc_cali_curve_fitting_config_t cali_config_1 = {
+        .unit_id = ADC_UNIT_1 ,
+        .atten = ADC_ATTEN_DB,
+        .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
+    };
+    adc_cali_curve_fitting_config_t cali_config_2 = {
+        .unit_id = ADC_UNIT_2 ,
+        .atten = ADC_ATTEN_DB,
+        .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
+    };
+    ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_1, &adc1_cali_handle));
+    ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_2, &adc2_cali_handle));
     // SKAL BRUGE adc_cali_raw_to_voltage()
 
     // // for samping rate validation:
@@ -153,7 +160,9 @@ void adc_task()
 
                         if(p_conv_res->type2.unit == ADC_UNIT_1)
                         {
-                            gs_au16_adc1_temp_buf[i32_adc1_idx_counter] = p_conv_res->type2.data;
+                            adc_cali_raw_to_voltage(adc1_cali_handle, (int)(p_conv_res->type2.data), &adc1_temp_voltage);
+
+                            gs_au16_adc1_temp_buf[i32_adc1_idx_counter] = (uint16_t)adc1_temp_voltage;
                             i32_adc1_idx_counter++;
 
                             if(i32_adc1_idx_counter > (RES_BUFFER_SIZE - 1))  // SKAL LIGE TÆNKE OM DET VIRKER. NÅR DET ENE ER INDEX OG DET ANDET ER STØRELSE
@@ -170,7 +179,9 @@ void adc_task()
 
                         else if(p_conv_res->type2.unit == ADC_UNIT_2)
                         {
-                            gs_au16_adc2_temp_buf[i32_adc1_idx_counter] = p_conv_res->type2.data;
+                            adc_cali_raw_to_voltage(adc2_cali_handle, (int)(p_conv_res->type2.data), &adc2_temp_voltage);
+
+                            gs_au16_adc2_temp_buf[i32_adc1_idx_counter] = (uint16_t)adc2_temp_voltage;
                             i32_adc2_idx_counter++;
 
                             if(i32_adc2_idx_counter > (RES_BUFFER_SIZE -1)) 
