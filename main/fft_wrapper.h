@@ -9,12 +9,12 @@ typedef enum{
     one_real_input_normal,
     one_real_input_fast,
     two_real_input_fast
-} eFFT_type_t
+} eFFT_type_t;
 
 typedef enum {
     radix2,
     radix4
-} eFFT_radix_type_t
+} eFFT_radix_type_t;
 
 
 typedef enum {
@@ -24,7 +24,7 @@ typedef enum {
     blackman_nuttall,
     nuttall,
     flat_top,
-} eFFT_window_type_t
+} eFFT_window_type_t;
 
 
 

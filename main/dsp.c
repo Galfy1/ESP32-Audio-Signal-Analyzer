@@ -16,11 +16,15 @@ static const char *ADC_TAG = "DSP.C";
 
 
 
-static uint16_t * gs_pu16_adc1_shared;
-static uint16_t * gs_pu16_adc2_shared;
+static float * gs_pf32_adc1_shared;
+static float * gs_pf32_adc2_shared;
 
-static uint16_t gs_au16_adc1_temp_buf[RES_BUFFER_SIZE] = {0};  
-static uint16_t gs_au16_adc2_temp_buf[RES_BUFFER_SIZE] = {0};  
+// Arrayes are here 16bit alligned by the compiler in memory to make eliminate any unsesessay memory accessesing overhead
+// See: http://www.songho.ca/misc/alignment/dataalign.html for more info
+__attribute__((aligned(16))) 
+static float gs_af32_adc1_temp_buf[RES_BUFFER_SIZE] = {0};  
+__attribute__((aligned(16))) 
+static float gs_af32_adc2_temp_buf[RES_BUFFER_SIZE] = {0};  
 
 static SemaphoreHandle_t gs_adc1_shared_mem_sem;   
 static SemaphoreHandle_t gs_adc2_shared_mem_sem;
@@ -35,14 +39,14 @@ void dsp_left_ch_task()
 
         if(xSemaphoreTake(gs_adc1_shared_mem_sem, portMAX_DELAY) == pdTRUE)
         {
-            memcpy(gs_au16_adc1_temp_buf , gs_pu16_adc1_shared , sizeof(gs_au16_adc1_temp_buf));
-            memset(gs_pu16_adc1_shared, 0, sizeof(gs_au16_adc1_temp_buf));  // Reset the shared memory, just to be sure (gs_au16_adc1_temp_buf is same size as shared space array)
+            memcpy(gs_af32_adc1_temp_buf , gs_pf32_adc1_shared , sizeof(gs_af32_adc1_temp_buf));
+            memset(gs_pf32_adc1_shared, 0, sizeof(gs_af32_adc1_temp_buf));  // Reset the shared memory, just to be sure (gs_af32_adc1_temp_buf is same size as shared space array)
             xSemaphoreGive(gs_adc1_shared_mem_sem);
 
-            ESP_LOGI(ADC_TAG, "WUHUUU: %d" , gs_au16_adc1_temp_buf[0]);
+            ESP_LOGI(ADC_TAG, "WUHUUU: %f" , gs_af32_adc1_temp_buf[0]);
             // for(int32_t i = 0 ; i <= RES_BUFFER_SIZE ; i += 1)
             // {
-            //     ESP_LOGI(ADC_TAG, "WUHUUU %d: %d" , (int)i, gs_au16_adc1_temp_buf[i]);
+            //     ESP_LOGI(ADC_TAG, "WUHUUU %d: %d" , (int)i, gs_af32_adc1_temp_buf[i]);
             // }
 
 
@@ -52,9 +56,9 @@ void dsp_left_ch_task()
 
         
 
-        //  for(int32_t i = 0 ; i <= sizeof(gs_au16_adc1_temp_buf) ; i += 100)
+        //  for(int32_t i = 0 ; i <= sizeof(gs_af32_adc1_temp_buf) ; i += 100)
         //  {
-        //     ESP_LOGI(ADC_TAG, "WUHUUU: %d" , gs_au16_adc1_temp_buf[i]);
+        //     ESP_LOGI(ADC_TAG, "WUHUUU: %d" , gs_af32_adc1_temp_buf[i]);
         //  }
 
 
@@ -73,8 +77,8 @@ void dsp_right_ch_task()
 
         if(xSemaphoreTake(gs_adc2_shared_mem_sem, portMAX_DELAY) == pdTRUE)
         {
-            memcpy(gs_au16_adc2_temp_buf , gs_pu16_adc2_shared , sizeof(gs_au16_adc2_temp_buf));
-            memset(gs_pu16_adc2_shared, 0, sizeof(gs_au16_adc2_temp_buf));  // Reset the shared memory, just to be sure (gs_au16_adc1_temp_buf is same size as shared space array)
+            memcpy(gs_af32_adc2_temp_buf , gs_pf32_adc2_shared , sizeof(gs_af32_adc2_temp_buf));
+            memset(gs_pf32_adc2_shared, 0, sizeof(gs_af32_adc2_temp_buf));  // Reset the shared memory, just to be sure (gs_af32_adc1_temp_buf is same size as shared space array)
             xSemaphoreGive(gs_adc2_shared_mem_sem);
         }
 
@@ -84,10 +88,10 @@ void dsp_right_ch_task()
 }
 
 
-void dsp_init(uint16_t * pu16_adc1_shared, uint16_t * pu16_adc2_shared, SemaphoreHandle_t adc1_shared_mem_sem, SemaphoreHandle_t adc2_shared_mem_sem)
+void dsp_init(float * pu16_adc1_shared, float * pu16_adc2_shared, SemaphoreHandle_t adc1_shared_mem_sem, SemaphoreHandle_t adc2_shared_mem_sem)
 {
-    gs_pu16_adc1_shared = pu16_adc1_shared;
-    gs_pu16_adc2_shared = pu16_adc2_shared;
+    gs_pf32_adc1_shared = pu16_adc1_shared;
+    gs_pf32_adc2_shared = pu16_adc2_shared;
 
     gs_adc1_shared_mem_sem = adc1_shared_mem_sem;
     gs_adc2_shared_mem_sem = adc2_shared_mem_sem;

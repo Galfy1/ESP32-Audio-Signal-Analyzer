@@ -23,8 +23,8 @@ See: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/s
 // Uart GPIO19 and GPIO20 are reserved for JTAG debugging (tror jeg. slet hvis jeg ikke kan få det til at virke)
 
 
-static uint16_t gs_au16_adc1_shared[RES_BUFFER_SIZE] = {0};  // Shared memory ADC1 (Left mic ch.)
-static uint16_t gs_au16_adc2_shared[RES_BUFFER_SIZE] = {0};  // Shared memory ADC2 (Right mic ch.)
+static float gs_af32_adc1_shared[RES_BUFFER_SIZE] = {0};  // Shared memory ADC1 (Left mic ch.)
+static float gs_af32_adc2_shared[RES_BUFFER_SIZE] = {0};  // Shared memory ADC2 (Right mic ch.)
 
 
 
@@ -50,8 +50,8 @@ void app_main(void)
     }
 
     // Has to run before creating tasks:
-    adc_init(gs_au16_adc1_shared, gs_au16_adc2_shared, adc1_shared_mem_sem, adc2_shared_mem_sem); 
-    dsp_init(gs_au16_adc1_shared, gs_au16_adc2_shared, adc1_shared_mem_sem, adc2_shared_mem_sem);
+    adc_init(gs_af32_adc1_shared, gs_af32_adc2_shared, adc1_shared_mem_sem, adc2_shared_mem_sem); 
+    dsp_init(gs_af32_adc1_shared, gs_af32_adc2_shared, adc1_shared_mem_sem, adc2_shared_mem_sem);
 
     // Create tasks:
     // FIND LIGE UD AF MED DE PRIORITETER HER...

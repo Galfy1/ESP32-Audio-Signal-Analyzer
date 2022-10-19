@@ -27,13 +27,13 @@ static const char *ADC_TAG = "ADC.C";
 #define ADC_SAMPLING_FREQ   80 * 1000               // see soc caps file for max value
 
 
-static uint16_t * gs_pu16_adc1_shared;
-static uint16_t * gs_pu16_adc2_shared;
+static float * gs_pf32_adc1_shared;
+static float * gs_pf32_adc2_shared;
 
 static TaskHandle_t gs_adc_task_handle;
 
-static uint16_t gs_au16_adc1_temp_buf[RES_BUFFER_SIZE] = {0};  
-static uint16_t gs_au16_adc2_temp_buf[RES_BUFFER_SIZE] = {0};  
+static float gs_af32_adc1_temp_buf[RES_BUFFER_SIZE] = {0};  
+static float gs_af32_adc2_temp_buf[RES_BUFFER_SIZE] = {0};  
 
 static SemaphoreHandle_t gs_adc1_shared_mem_sem;   
 static SemaphoreHandle_t gs_adc2_shared_mem_sem;
@@ -162,7 +162,7 @@ void adc_task()
                         {
                             adc_cali_raw_to_voltage(adc1_cali_handle, (int)(p_conv_res->type2.data), &adc1_temp_voltage);
 
-                            gs_au16_adc1_temp_buf[i32_adc1_idx_counter] = (uint16_t)adc1_temp_voltage;
+                            gs_af32_adc1_temp_buf[i32_adc1_idx_counter] = (float)adc1_temp_voltage;
                             i32_adc1_idx_counter++;
 
                             if(i32_adc1_idx_counter > (RES_BUFFER_SIZE - 1))  // SKAL LIGE TÆNKE OM DET VIRKER. NÅR DET ENE ER INDEX OG DET ANDET ER STØRELSE
@@ -170,7 +170,7 @@ void adc_task()
                                 i32_adc1_idx_counter =  0;
                                 if(xSemaphoreTake(gs_adc1_shared_mem_sem, portMAX_DELAY) == pdTRUE) // Binary sempahore used to mutual exclusion
                                 {
-                                    memcpy(gs_pu16_adc1_shared, gs_au16_adc1_temp_buf, sizeof(gs_au16_adc1_temp_buf));
+                                    memcpy(gs_pf32_adc1_shared, gs_af32_adc1_temp_buf, sizeof(gs_af32_adc1_temp_buf));
                                     xSemaphoreGive(gs_adc1_shared_mem_sem);
                                     xTaskNotifyGive(gs_dsp_left_task_handle);    // Use direct task notification to syncronize use of the shared memory
                                 }
@@ -181,7 +181,7 @@ void adc_task()
                         {
                             adc_cali_raw_to_voltage(adc2_cali_handle, (int)(p_conv_res->type2.data), &adc2_temp_voltage);
 
-                            gs_au16_adc2_temp_buf[i32_adc1_idx_counter] = (uint16_t)adc2_temp_voltage;
+                            gs_af32_adc2_temp_buf[i32_adc1_idx_counter] = (float)adc2_temp_voltage;
                             i32_adc2_idx_counter++;
 
                             if(i32_adc2_idx_counter > (RES_BUFFER_SIZE -1)) 
@@ -189,7 +189,7 @@ void adc_task()
                                 i32_adc2_idx_counter = 0;
                                 if(xSemaphoreTake(gs_adc2_shared_mem_sem, portMAX_DELAY) == pdTRUE)
                                 {
-                                    memcpy(gs_pu16_adc2_shared, gs_au16_adc2_temp_buf, sizeof(gs_au16_adc2_temp_buf));
+                                    memcpy(gs_pf32_adc2_shared, gs_af32_adc2_temp_buf, sizeof(gs_af32_adc2_temp_buf));
                                     xSemaphoreGive(gs_adc2_shared_mem_sem);
                                     xTaskNotifyGive(gs_dsp_right_task_handle);
                                 }
@@ -275,10 +275,10 @@ void adc_set_dsp_task_handles(TaskHandle_t dsp_left_task_handle, TaskHandle_t ds
 }
 
 
-void adc_init(uint16_t * pu16_adc1_shared, uint16_t * pu16_adc2_shared, SemaphoreHandle_t adc1_shared_mem_sem, SemaphoreHandle_t adc2_shared_mem_sem)
+void adc_init(float * pu16_adc1_shared, float * pu16_adc2_shared, SemaphoreHandle_t adc1_shared_mem_sem, SemaphoreHandle_t adc2_shared_mem_sem)
 {
-    gs_pu16_adc1_shared = pu16_adc1_shared;
-    gs_pu16_adc2_shared = pu16_adc2_shared;
+    gs_pf32_adc1_shared = pu16_adc1_shared;
+    gs_pf32_adc2_shared = pu16_adc2_shared;
 
     gs_adc1_shared_mem_sem = adc1_shared_mem_sem;
     gs_adc2_shared_mem_sem = adc2_shared_mem_sem;
