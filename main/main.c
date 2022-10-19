@@ -23,8 +23,8 @@ See: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/s
 // Uart GPIO19 and GPIO20 are reserved for JTAG debugging (tror jeg. slet hvis jeg ikke kan få det til at virke)
 
 
-static float gs_af32_adc1_shared[RES_BUFFER_SIZE] = {0};  // Shared memory ADC1 (Left mic ch.)
-static float gs_af32_adc2_shared[RES_BUFFER_SIZE] = {0};  // Shared memory ADC2 (Right mic ch.)
+static float gs_af32_adc1_shared[DATA_BLOCK_SIZE] = {0};  // Shared memory ADC1 (Left mic ch.)
+static float gs_af32_adc2_shared[DATA_BLOCK_SIZE] = {0};  // Shared memory ADC2 (Right mic ch.)
 
 
 

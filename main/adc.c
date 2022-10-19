@@ -32,8 +32,8 @@ static float * gs_pf32_adc2_shared;
 
 static TaskHandle_t gs_adc_task_handle;
 
-static float gs_af32_adc1_temp_buf[RES_BUFFER_SIZE] = {0};  
-static float gs_af32_adc2_temp_buf[RES_BUFFER_SIZE] = {0};  
+static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};  
+static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};  
 
 static SemaphoreHandle_t gs_adc1_shared_mem_sem;   
 static SemaphoreHandle_t gs_adc2_shared_mem_sem;
@@ -42,7 +42,7 @@ static TaskHandle_t gs_dsp_left_task_handle;
 static TaskHandle_t gs_dsp_right_task_handle;
 
 
-
+// ISR is placed in IRAM for low latency
 static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t handle, const adc_continuous_evt_data_t *edata, void *user_data)
 {
     BaseType_t mustYield = pdFALSE;
@@ -165,7 +165,7 @@ void adc_task()
                             gs_af32_adc1_temp_buf[i32_adc1_idx_counter] = (float)adc1_temp_voltage;
                             i32_adc1_idx_counter++;
 
-                            if(i32_adc1_idx_counter > (RES_BUFFER_SIZE - 1))  // SKAL LIGE TÆNKE OM DET VIRKER. NÅR DET ENE ER INDEX OG DET ANDET ER STØRELSE
+                            if(i32_adc1_idx_counter > (DATA_BLOCK_SIZE - 1))  // SKAL LIGE TÆNKE OM DET VIRKER. NÅR DET ENE ER INDEX OG DET ANDET ER STØRELSE
                             {
                                 i32_adc1_idx_counter =  0;
                                 if(xSemaphoreTake(gs_adc1_shared_mem_sem, portMAX_DELAY) == pdTRUE) // Binary sempahore used to mutual exclusion
@@ -184,7 +184,7 @@ void adc_task()
                             gs_af32_adc2_temp_buf[i32_adc1_idx_counter] = (float)adc2_temp_voltage;
                             i32_adc2_idx_counter++;
 
-                            if(i32_adc2_idx_counter > (RES_BUFFER_SIZE -1)) 
+                            if(i32_adc2_idx_counter > (DATA_BLOCK_SIZE -1)) 
                             {
                                 i32_adc2_idx_counter = 0;
                                 if(xSemaphoreTake(gs_adc2_shared_mem_sem, portMAX_DELAY) == pdTRUE)
@@ -258,7 +258,7 @@ void adc_task()
 //     // JEG KAN NOK IKKE GØRE SÅDAN HER MED POINTERS: DET SKAL NOK VÆRE POINTER POINTER!
 //     pu16_adc_buf_left = au16_adc1_shared;
 //     pu16_adc_buf_right = au16_adc2_shared;
-//     i32_res_buffer_len = RES_BUFFER_SIZE;
+//     i32_res_buffer_len = DATA_BLOCK_SIZE;
 
 //     //Tasks:
 //     //(tror den skal være høj prio, siden den skal kunne wakes med førstepritet fra ADC ISR'ren)

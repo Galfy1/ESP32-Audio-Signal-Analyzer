@@ -2,8 +2,6 @@
 #ifndef FFTWRAPPER_H_INCLUDED
 #define FFTWRAPPER_H_INCLUDED
 
-// Skriv at N skal være power of 2 ved radix 2 (og power of 4 ved radix 4 tror jeg)
-#define N_SAMPLES 4096 // FFT bin size (has to be under or equal the max fft length set in menuconfig)
 
 typedef enum{
     one_real_input_normal,
@@ -26,7 +24,10 @@ typedef enum {
     flat_top,
 } eFFT_window_type_t;
 
+esp_err_t fft_wrapper_init_normal(eFFT_window_type_t eFFT_window_type);
+esp_err_t fft_wrapper_init_fast(eFFT_window_type_t eFFT_window_type);
 
+esp_err_t fft_wrapper_start_fft_1real_fast(float *pf32_data, eFFT_radix_type_t s_radix);
 
 
 
