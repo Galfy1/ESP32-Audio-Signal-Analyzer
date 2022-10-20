@@ -22,10 +22,12 @@ See: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/s
 
 // Uart GPIO19 and GPIO20 are reserved for JTAG debugging (tror jeg. slet hvis jeg ikke kan få det til at virke)
 
-
+// Shared Memory:
 static float gs_af32_adc1_shared[DATA_BLOCK_SIZE] = {0};  // Shared memory ADC1 (Left mic ch.)
 static float gs_af32_adc2_shared[DATA_BLOCK_SIZE] = {0};  // Shared memory ADC2 (Right mic ch.)
 
+static float gs_af32_L_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of post proceesed FFT output from DSP task (Left mic ch.)
+static float gs_af32_R_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of post proceesed FFT output from DSP task (Right mic ch.)
 
 
 // SKAL FINDE UD AF HVORDAN JEG PASSER SEMAPHORE TIL FUNCITONER. OM DET ER OKAY DEN TAGER EN KOPI AF HANDLEN. DET ER DET VELL egentlig
@@ -44,14 +46,28 @@ void app_main(void)
     //Create sempahores:
     adc1_shared_mem_sem = xSemaphoreCreateMutex();
     adc2_shared_mem_sem = xSemaphoreCreateMutex();
-    if( (adc1_shared_mem_sem == NULL) || (adc2_shared_mem_sem == NULL))
+    fft_L_res_shr_mem_sem = xSemaphoreCreateMutex();  
+    fft_R_res_shr_mem_sem = xSemaphoreCreateMutex();  
+    if( (adc1_shared_mem_sem == NULL) || (adc2_shared_mem_sem == NULL) || (fft_L_res_shr_mem_sem == NULL) || (fft_R_res_shr_mem_sem == NULL))
     {
         ESP_LOGI(TAG, "ERROR: while creating one or more semaphores");
     }
 
-    // Has to run before creating tasks:
-    adc_init(gs_af32_adc1_shared, gs_af32_adc2_shared, adc1_shared_mem_sem, adc2_shared_mem_sem); 
-    dsp_init(gs_af32_adc1_shared, gs_af32_adc2_shared, adc1_shared_mem_sem, adc2_shared_mem_sem);
+    // Init functions (has to run before creating tasks):
+    adc_init(
+        gs_af32_adc1_shared, 
+        gs_af32_adc2_shared, 
+        adc1_shared_mem_sem, 
+        adc2_shared_mem_sem); 
+    dsp_init(
+        gs_af32_adc1_shared, 
+        gs_af32_adc2_shared, 
+        adc1_shared_mem_sem, 
+        adc2_shared_mem_sem,
+        gs_af32_L_fft_res_shr,
+        gs_af32_R_fft_res_shr,
+        fft_L_res_shr_mem_sem,
+        fft_R_res_shr_mem_sem);
 
     // Create tasks:
     // FIND LIGE UD AF MED DE PRIORITETER HER...

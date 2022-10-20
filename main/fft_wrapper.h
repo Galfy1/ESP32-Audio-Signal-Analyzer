@@ -3,15 +3,22 @@
 #define FFTWRAPPER_H_INCLUDED
 
 
+// typedef enum{
+//     one_real_input_normal,
+//     one_real_input_fast,
+//     two_real_input_fast
+// } eFFT_type_t;
+
 typedef enum{
-    one_real_input_normal,
-    one_real_input_fast,
-    two_real_input_fast
-} eFFT_type_t;
+    ampltitude,
+    ampltitude_db,
+    power,
+    power_db,
+} eFFT_output_form_t;
 
 typedef enum {
     radix2,
-    radix4
+    radix4,
 } eFFT_radix_type_t;
 
 
@@ -27,7 +34,7 @@ typedef enum {
 esp_err_t fft_wrapper_init_normal(eFFT_window_type_t eFFT_window_type);
 esp_err_t fft_wrapper_init_fast(eFFT_window_type_t eFFT_window_type);
 
-esp_err_t fft_wrapper_start_fft_1real_fast(float *pf32_data, eFFT_radix_type_t s_radix);
+esp_err_t fft_wrapper_start_fft_1real_fast(float *pf32_data, eFFT_radix_type_t s_radix, eFFT_output_form_t s_output_form);
 
 
 

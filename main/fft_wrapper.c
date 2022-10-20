@@ -39,13 +39,26 @@ static float gs_af32_wind[DATA_BLOCK_SIZE];  // husk den der N_SAMPLES
 // Se side 103 i ny dsp bog for at se hvordan man extracter amplitude eller power fra fft resultat
 // 10*log10() bruges når man konverter power til db
 // 20*log10() bruges når man konverter amplitude til db
-static esp_err_t conv_fft_res_to_ampl_db(float * pf32_data, int32_t bin_size)
+static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db)
 {
-    // Husk: DEN SKAL KALDES MED N>>1 i der hvor vi bruger half fft'er
-    for(int i = 0; i < bin_size; i++)
+    if(b_result_in_db == true)
     {
-        pf32_data[i] = 20 * log10f( sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / bin_size);    // Ak = 1/N sqrt(Real[X(k)]^2 + Imag[X(k)]^2)
+        //unsigned int start_amp_db = dsp_get_cpu_cycle_count(); // for benchmark
+        for(int i = 0; i < i32_bin_size; i++)
+        {
+            pf32_data[i] = 20 * log10f( sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / i32_bin_size);    // Ak = 1/N * sqrt(Real[X(k)]^2 + Imag[X(k)]^2)
+        }
+        //unsigned int stop_amp_db = dsp_get_cpu_cycle_count(); // for benchmark
+        // ESP_LOGI(TAG, "SPEED TEST, ampl_db:  %i", stop_amp_db-start_amp_db); // for benchmark
     }
+    else
+    {
+        for(int i = 0; i < i32_bin_size; i++)
+        {
+            pf32_data[i] = sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / i32_bin_size;    // Ak = 1/N * sqrt(Real[X(k)]^2 + Imag[X(k)]^2)
+        }
+    }
+
     return ESP_OK;
 }
 
@@ -59,10 +72,31 @@ static esp_err_t conv_fft_res_to_ampl_db(float * pf32_data, int32_t bin_size)
 // Husk måske også lige at convert "x-aksen" fra bin nr til frekvens (skal måske ikke gøres her men et andet sted idk)
 // (se (4.26) på side 103 i ny dsp bog for denne formel)
 
-// static esp_err_t conv_fft_res_to_pow_db()
-// {
-//  // VED IKKE HVORFOR HAN DELER MED 2N I HANS OG IKKE N^2 SOM DER STÅR I BOGEN 
-// }
+static esp_err_t conv_fft_res_to_pow(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db)
+{
+    // VED IKKE HVORFOR HAN DELER MED 2N I HANS OG IKKE N^2 SOM DER STÅR I BOGEN 
+
+    if(b_result_in_db == true)
+    {
+        //unsigned int start_pow_db = dsp_get_cpu_cycle_count(); // for benchmark
+        for(int i = 0; i < i32_bin_size; i++)
+        {
+            pf32_data[i] = 10 * log10f( (pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / (i32_bin_size*i32_bin_size));    // Ak = 1/(N^2) * (Real[X(k)]^2 + Imag[X(k)]^2)
+        }
+        //unsigned int stop_pow_db = dsp_get_cpu_cycle_count(); // for benchmark
+        //ESP_LOGI(TAG, "SPEED TEST, pow_db:  %i", stop_pow_db-start_pow_db); // for benchmark
+    }
+    else
+    {
+        for(int i = 0; i < i32_bin_size; i++)
+        {
+            pf32_data[i] = (pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / (i32_bin_size*i32_bin_size);    // Ak = 1/(N^2) * (Real[X(k)]^2 + Imag[X(k)]^2)
+        }
+    }
+
+
+    return ESP_OK;
+}
 
 
 static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
@@ -168,20 +202,20 @@ esp_err_t fft_wrapper_init_fast(eFFT_window_type_t eFFT_window_type)
 
 
 
-esp_err_t fft_wrapper_init()
-{
-    esp_err_t ret;
+// esp_err_t fft_wrapper_init()
+// {
+//     esp_err_t ret;
 
-    ret = dsps_fft2r_init_fc32(NULL, CONFIG_DSP_MAX_FFT_SIZE);
-    if (ret != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Not possible to initialize FFT. Error = %i", ret);
-        return ret;
-    }
+//     ret = dsps_fft2r_init_fc32(NULL, CONFIG_DSP_MAX_FFT_SIZE);
+//     if (ret != ESP_OK)
+//     {
+//         ESP_LOGE(TAG, "Not possible to initialize FFT. Error = %i", ret);
+//         return ret;
+//     }
 
-    gs_init_called = true;
-    return ESP_OK;
-}
+//     gs_init_called = true;
+//     return ESP_OK;
+// }
 
 
 
@@ -205,35 +239,28 @@ esp_err_t fft_wrapper_init()
 
 // PROBLEM: DEN FUNKTOIN HER KRÆVER INPUT ARRAYED ER I FLOATS.. MEN DET ER I uint16_t... Det skal jeg lige finde ua af...
 // Skriv at outputte er done in place og derfor har samme lokation som inputarrayed
+// SKriv det med outputtet:  First half of pf32_data is aplitude/power values. Second half is junk.
 // SKriv at pf32_data er et REAL input
-esp_err_t fft_wrapper_start_fft_1real_fast(float *pf32_data, eFFT_radix_type_t s_radix)
+
+esp_err_t fft_wrapper_start_fft_1real_fast(float *pf32_data, eFFT_radix_type_t s_radix, eFFT_output_form_t s_output_form)
 {
+    esp_err_t ret;
+
     if(gs_init_called == false)
     {
         ESP_LOGE(TAG, "Error: fft_wrapper_start_fft() called before fft_wrapper_init() and fft_wrapper_generete_wind()" );
         return ESP_FAIL;
     }
 
-    // Get location of data:
-    // EEEEH DET KAN JEG DA IKKE DET HER...gs_af32_data er ikke bare en pointer, men et array i sig selv...
-    // Tror faktiske bare det er mit DSP array der skal have den der attribyte til sig...
+    // Format for fft api and multiply with window function:
+    for(int32_t i = 0; i < i32_N; i++)
+    {
+        pf32_data[i] = pf32_data[i] * gs_af32_wind[i];
+    }
 
     switch(s_radix)
     {
-        esp_err_t ret;
-
         case radix4:
-            
-            // SKAL JEG LAVE TJEK FOR AT N STØRELSEN GÅR OP HER? Nej det er nok spild af processerkræft at tjekke hver gang. 
-            // Ved ikke om api funktoinen tjekker for det. 
-            // ELlers kan jeg bare tilføje det som en kommentar til funktionen, at N skal gå på i 4, hvis man bruger raix 4
-            // Har lige tjekket radix 4 funktionen... er ret sikker på den tjekker. Så jeg tilføjer bare en kommentar i min function
-
-            // Format for fft api and multiply with window function:
-            for(int32_t i = 0; i < i32_N; i++)
-            {
-                pf32_data[i] = pf32_data[i] * gs_af32_wind[i];
-            }
 
             // FFT Radix-4:
             ret = dsps_fft4r_fc32(pf32_data, i32_N>>1); // Half size FFT
@@ -251,38 +278,63 @@ esp_err_t fft_wrapper_start_fft_1real_fast(float *pf32_data, eFFT_radix_type_t s
                 return ret;
             }
 
-            // Splitting operation:
-            ret = dsps_cplx2real_fc32(pf32_data, i32_N>>1);                 // The output of the FFT is normally "dual sided" (from 0hz to fs(-1 bin i think)). 
-            if(ret != ESP_OK)                                               // HOWEVER when this "half fft size" tehcnique is used, the output of the fft and dsps_cplx2real_fc32 is single sided (from 0hz til fny(-1 bin i think))
-            {                                                               // Aka this api does not take the complex conjugate at append it (as descbried in our paper) to get the dual sided fft.
-                ESP_LOGE(TAG, "ERROR: Radix4 Splitting Operation failed = %i", ret);;
-                return ret;
-            }
-
-            // Extract amplitude and convert to dB:
-            conv_fft_res_to_ampl_db(pf32_data, i32_N>>1);
             break;
 
         case radix2:
 
-            // Format for fft api and multiply with window function:
-            for(int32_t i = 0; i < i32_N; i++)
+            // FFT Radix-2:
+            ret = dsps_fft2r_fc32(pf32_data, i32_N >> 1); // Half size FFT
+            if(ret != ESP_OK)
             {
-                pf32_data[i] = pf32_data[i] * gs_af32_wind[i];
+                ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);;
+                return ret;
             }
 
-            // FFT Radix-2:
-            dsps_fft2r_fc32(pf32_data, i32_N >> 1); // Half size FFT
             // Bit reverse:
-            dsps_bit_rev2r_fc32(pf32_data, i32_N >> 1);
-            // Splitting operation:
-            dsps_cplx2real_fc32(pf32_data, i32_N>>1);
-            // Extract amplitude and convert to dB:
-            conv_fft_res_to_ampl_db(pf32_data, i32_N>>1);
+            ret = dsps_bit_rev2r_fc32(pf32_data, i32_N >> 1);
+            if(ret != ESP_OK)
+            {
+                ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);;
+                return ret;
+            }
 
             break;
 
         default:
+            ESP_LOGE(TAG, "ERROR: Invalid paramater (radix type)");
+            break;
+    }
+
+    // Splitting operation:
+    ret = dsps_cplx2real_fc32(pf32_data, i32_N>>1);                 // The output of the FFT is normally "dual sided" (from 0hz to fs(-1 bin i think)). 
+    if(ret != ESP_OK)                                               // HOWEVER when this "half fft size" tehcnique is used, the output of the fft and dsps_cplx2real_fc32 is single sided (from 0hz til fny(-1 bin i think))
+    {                                                               // Aka this api does not take the complex conjugate at append it (as descbried in our paper) to get the dual sided fft.
+        ESP_LOGE(TAG, "ERROR: Splitting Operation failed = %i", ret);;
+        return ret;
+    }
+
+    // Extract amplitude/power and convert to dB if specified:
+    switch(s_output_form)
+    {
+
+        case ampltitude:
+            conv_fft_res_to_ampl(pf32_data, i32_N>>1, false);
+            break;
+
+        case ampltitude_db:
+            conv_fft_res_to_ampl(pf32_data, i32_N>>1, true);
+            break;
+
+        case power:
+            conv_fft_res_to_pow(pf32_data, i32_N>>1, false) ;
+            break;
+
+        case power_db:
+            conv_fft_res_to_ampl(pf32_data, i32_N>>1, true);  // conv_fft_res_to_ampl in db gives same result as conv_fft_res_to_pow in db. However conv_fft_res_to_ampl is faster! (around 1095848 vs 576608 cycles)
+            break;
+
+        default:
+            ESP_LOGE(TAG, "ERROR: Invalid paramater (output format type)");
             break;
     }
     
