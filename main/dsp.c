@@ -40,7 +40,7 @@ void dsp_left_ch_task()
 {
 
     // FOR FFT TEST:
-    dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 3000.0, 0.16, 0);
+    dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 3000.0, 0.7, 0);  // De hentyder i doc til at 1 er fny... MEN det argere mere somom at 1 er fs ogs 0.5 er fny...
     // for(int i = 0 ; i < 300 ; i++)
     // {   
     //     ESP_LOGI(ADC_TAG, "X1 Index %d: %f", i, x1[i]);
@@ -50,11 +50,13 @@ void dsp_left_ch_task()
     fft_wrapper_init_fast(hann);
     fft_wrapper_start_fft_1real_fast(x1, radix4);
 
-    for(int i = 0 ; i < 300 ; i++)
+    for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
     {   
         ESP_LOGI(ADC_TAG, "X1 Index %d: %f", i, x1[i]);
     }
-    dsps_view_spectrum(x1, 4096, -60, 40);
+
+    // First half of x1 is aplitude values. Second half is junk.
+    dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
 
 
 

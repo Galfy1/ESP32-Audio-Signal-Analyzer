@@ -2,6 +2,14 @@
 #define COMMON_DEFINES_H_INCLUDED
 
 
+//Burde man måske køre radix 2? Så kan man have DATA_BLOCK_SIZE 4096 (måske)
+//og så bare smid hver anden data blok væk, så esp'en har tid til at lave fft
+// Opøsning:
+// Ved radix4 (DATA_BLOCK_SIZE = 2048):
+        // Hver bin index er  BW/(DATA_BLOCK_SIZE/2)  -->  (16000-125)/(2048/2) = 15.503... Hz
+// Ved radix2 (DATA_BLOCK_SIZE = 4096):
+        // Hver bin index er  (16000-125)/(2048/2) = 7.751... Hz
+
 
 #define DATA_BLOCK_SIZE 2048        // Size of 1 block of samples in amount of elements
                                     /* Requirements for this value:

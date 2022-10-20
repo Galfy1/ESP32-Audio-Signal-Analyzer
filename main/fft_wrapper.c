@@ -44,7 +44,7 @@ static esp_err_t conv_fft_res_to_ampl_db(float * pf32_data, int32_t bin_size)
     // Husk: DEN SKAL KALDES MED N>>1 i der hvor vi bruger half fft'er
     for(int i = 0; i < bin_size; i++)
     {
-        pf32_data[i] = 20 * log10f( sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1]) / bin_size);    // Ak = 1/N sqrt(Real[X(k)]^2 + Imag[X(k)]^2)
+        pf32_data[i] = 20 * log10f( sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / bin_size);    // Ak = 1/N sqrt(Real[X(k)]^2 + Imag[X(k)]^2)
     }
     return ESP_OK;
 }
@@ -252,9 +252,9 @@ esp_err_t fft_wrapper_start_fft_1real_fast(float *pf32_data, eFFT_radix_type_t s
             }
 
             // Splitting operation:
-            ret = dsps_cplx2real_fc32(pf32_data, i32_N>>1);
-            if(ret != ESP_OK)
-            {
+            ret = dsps_cplx2real_fc32(pf32_data, i32_N>>1);                 // The output of the FFT is normally "dual sided" (from 0hz to fs(-1 bin i think)). 
+            if(ret != ESP_OK)                                               // HOWEVER when this "half fft size" tehcnique is used, the output of the fft and dsps_cplx2real_fc32 is single sided (from 0hz til fny(-1 bin i think))
+            {                                                               // Aka this api does not take the complex conjugate at append it (as descbried in our paper) to get the dual sided fft.
                 ESP_LOGE(TAG, "ERROR: Radix4 Splitting Operation failed = %i", ret);;
                 return ret;
             }
