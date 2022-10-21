@@ -11,7 +11,7 @@
 #include "adc.h"
 #include "dsp.h"
 
-static const char *TAG = "TeestLog";
+static const char *TAG = "main.c";
 
 /*
 Unlike Vanilla FreeRTOS, users must not call vTaskStartScheduler(). 
@@ -33,21 +33,30 @@ static float gs_af32_R_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of
 // SKAL FINDE UD AF HVORDAN JEG PASSER SEMAPHORE TIL FUNCITONER. OM DET ER OKAY DEN TAGER EN KOPI AF HANDLEN. DET ER DET VELL egentlig
 
 
+/* Structure guidelines for this project:
+    All Tasks should be created in main.c
+    All Queues, Semaphores and Shared memory used by multiple files should be created in main.c
+    All Queues, Semaphores and Shared memory used by only one file should be created just within that file
+*/
+
+
 void app_main(void)
 {    
     SemaphoreHandle_t adc1_shared_mem_sem;   
     SemaphoreHandle_t adc2_shared_mem_sem;
+    SemaphoreHandle_t fft_L_res_shr_mem_sem;
+    SemaphoreHandle_t fft_R_res_shr_mem_sem;
+
     TaskHandle_t dsp_left_task_handle;
     TaskHandle_t dsp_right_task_handle;
-
 
     ESP_LOGI(TAG, "DET VIRKER :D");
 
     //Create sempahores:
-    adc1_shared_mem_sem = xSemaphoreCreateMutex();
-    adc2_shared_mem_sem = xSemaphoreCreateMutex();
-    fft_L_res_shr_mem_sem = xSemaphoreCreateMutex();  
-    fft_R_res_shr_mem_sem = xSemaphoreCreateMutex();  
+    adc1_shared_mem_sem = xSemaphoreCreateMutex();    // Mutex for gs_af32_adc1_shared
+    adc2_shared_mem_sem = xSemaphoreCreateMutex();    // Mutex for gs_af32_adc2_shared
+    fft_L_res_shr_mem_sem = xSemaphoreCreateMutex();  // Mutex for gs_af32_L_fft_res_shr  
+    fft_R_res_shr_mem_sem = xSemaphoreCreateMutex();  // Mutex for gs_af32_R_fft_res_shr
     if( (adc1_shared_mem_sem == NULL) || (adc2_shared_mem_sem == NULL) || (fft_L_res_shr_mem_sem == NULL) || (fft_R_res_shr_mem_sem == NULL))
     {
         ESP_LOGI(TAG, "ERROR: while creating one or more semaphores");
