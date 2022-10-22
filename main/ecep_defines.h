@@ -4,10 +4,13 @@
 #define ECEP_DEFINES_H_INCLUDED
 
 
+#define ECEP_HEADER_SIZE        4  // In bytes
+#define ECEP_MAX_PACKAGE_SIZE   ECEP_HEADER_SIZE + (4*UART_RD_BUF_SIZE)   // Max package size in bytes.
+                                                                          // (chosen by biggest command or event. In this case: Left/Right FFT Result event)
 
-
-
-
+                                                                          // HOV er det smart at have en define fra common_defines her inde??   
+                                                                          // Og hvis R/L FFT result har en param struct, skal dens størrelse også lige tilføjes
+#define ECEP_PACKET_TYPE 42
 
 
 

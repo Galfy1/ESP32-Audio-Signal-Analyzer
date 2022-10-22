@@ -10,6 +10,7 @@
 #include "common_defines.h"
 #include "adc.h"
 #include "dsp.h"
+#include "ecep_uart.h"
 
 static const char *TAG = "main.c";
 
@@ -59,7 +60,7 @@ void app_main(void)
     fft_R_res_shr_mem_sem = xSemaphoreCreateMutex();  // Mutex for gs_af32_R_fft_res_shr
     if( (adc1_shared_mem_sem == NULL) || (adc2_shared_mem_sem == NULL) || (fft_L_res_shr_mem_sem == NULL) || (fft_R_res_shr_mem_sem == NULL))
     {
-        ESP_LOGI(TAG, "ERROR: while creating one or more semaphores");
+        ESP_LOGE(TAG, "ERROR: while creating one or more semaphores");
     }
 
     // Init functions (has to run before creating tasks):
@@ -77,6 +78,7 @@ void app_main(void)
         gs_af32_R_fft_res_shr,
         fft_L_res_shr_mem_sem,
         fft_R_res_shr_mem_sem);
+    ecep_uart_init();
 
     // Create tasks:
     // FIND LIGE UD AF MED DE PRIORITETER HER...
@@ -87,6 +89,8 @@ void app_main(void)
                                                                                 This is done so the adc task can use direct task notification to syncronize use of the shared memory
                                                                              */ 
     xTaskCreatePinnedToCore(adc_task, "adc_task", 4096, NULL, 2, NULL, 1); // Use core 1 
+    xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 4096, NULL, 4, NULL, 1);
 
 
 }

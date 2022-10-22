@@ -224,7 +224,7 @@ void adc_task()
 
 
                     } else {
-                        ESP_LOGI(ADC_TAG, "Invalid data [%d_%d_%x]", p_conv_res->type2.unit+1, p_conv_res->type2.channel, p_conv_res->type2.data);
+                        ESP_LOGW(ADC_TAG, "Invalid data [%d_%d_%x]", p_conv_res->type2.unit+1, p_conv_res->type2.channel, p_conv_res->type2.data);
                     }
                 }
 
