@@ -63,9 +63,15 @@ void dsp_left_ch_task()
     // dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
     // ---FFT TEST END---
 
+    int32_t ret;
+
     while(1)
     {  
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY); /* Block this task untill triggeret by adc task.
+                                                    It is okay if the ESP is not fast enough finish its DSP processing berfore a new adc data block arrives.
+                                                    It will simply miss an adc data block and take the newest instead.
+                                                    (effectivly lowerering the FFT result refresh rate. The refresh rate is however still plenty fast for our purpose)
+                                                 */ 
 
         if(xSemaphoreTake(gs_adc1_shared_mem_sem, portMAX_DELAY) == pdTRUE)
         {
@@ -74,9 +80,10 @@ void dsp_left_ch_task()
             xSemaphoreGive(gs_adc1_shared_mem_sem);
             
             //ESP_LOGI(ADC_TAG, "WUHUUU: %f" , gs_af32_adc1_temp_buf[0]);
+            
             // for(int32_t i = 0 ; i <= DATA_BLOCK_SIZE ; i += 1)
             // {
-            //     ESP_LOGI(ADC_TAG, "WUHUUU %d: %d" , (int)i, gs_af32_adc1_temp_buf[i]);
+            //     ESP_LOGI(ADC_TAG, "WUHUUU %d: %f" , (int)i, gs_af32_adc1_temp_buf[i]);
             // }
 
             fft_wrapper_start_fft_1real_fast(gs_af32_adc1_temp_buf, RADIX_USED, FFT_OUTPUT_FORMAT); // Run FFT
@@ -146,8 +153,8 @@ void dsp_init(float * pf32_adc1_shared,
     gs_adc1_shared_mem_sem = adc1_shared_mem_sem;
     gs_adc2_shared_mem_sem = adc2_shared_mem_sem;
 
-    gs_pf32_left_fft_res = pf32_L_fft_res_shr;
-    gs_pf32_right_fft_res = pf32_R_fft_res_shr;
+    gs_pf32_L_fft_res_shr = pf32_L_fft_res_shr;
+    gs_pf32_R_fft_res_shr = pf32_R_fft_res_shr;
     gs_fft_L_res_shr_mem_sem = fft_L_res_shr_mem_sem;
     gs_fft_R_res_shr_mem_sem = fft_R_res_shr_mem_sem;
 

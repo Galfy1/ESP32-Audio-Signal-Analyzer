@@ -31,8 +31,6 @@ static float gs_af32_L_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of
 static float gs_af32_R_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of post proceesed FFT output from DSP task (Right mic ch.)
 
 
-// SKAL FINDE UD AF HVORDAN JEG PASSER SEMAPHORE TIL FUNCITONER. OM DET ER OKAY DEN TAGER EN KOPI AF HANDLEN. DET ER DET VELL egentlig
-
 
 /* Structure guidelines for this project:
     All Tasks should be created in main.c

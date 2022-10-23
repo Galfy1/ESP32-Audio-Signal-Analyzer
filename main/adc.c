@@ -20,12 +20,13 @@ static const char *ADC_TAG = "ADC.C";
 // ADC 1 --> Left mic channel
 // ADC 2 --> Right mic channel
 
+#define ADC_1_CHANNEL       ADC_CHANNEL_6 // GPIO 7
+#define ADC_2_CHANNEL       ADC_CHANNEL_6 // GPIO 17
 
-#define CONV_FRAME_SIZE     256  // In bytes
 #define ADC_CONV_MODE       ADC_CONV_BOTH_UNIT
 #define ADC_ATTEN_DB        ADC_ATTEN_DB_2_5
 #define ADC_SAMPLING_FREQ   80 * 1000               // see soc caps file for max value
-
+#define CONV_FRAME_SIZE     256  // In bytes
 
 static float * gs_pf32_adc1_shared;
 static float * gs_pf32_adc2_shared;
@@ -101,12 +102,12 @@ void adc_task()
     dig_cfg.pattern_num = 2;
 
     adc_pattern[0].atten = ADC_ATTEN_DB;
-    adc_pattern[0].channel = ADC_CHANNEL_0; //GPIO 1
+    adc_pattern[0].channel = ADC_1_CHANNEL;
     adc_pattern[0].unit = ADC_UNIT_1;    //ADC 1
     adc_pattern[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
     adc_pattern[1].atten = ADC_ATTEN_DB;
-    adc_pattern[1].channel = ADC_CHANNEL_7; // GPIO 18
+    adc_pattern[1].channel = ADC_2_CHANNEL; 
     adc_pattern[1].unit = ADC_UNIT_2;    // ADC 2
     adc_pattern[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 

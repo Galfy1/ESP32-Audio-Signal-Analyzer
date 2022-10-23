@@ -11,7 +11,7 @@
         // Hver bin index er  (16000-125)/(2048/2) = 7.751... Hz
 
 
-#define DATA_BLOCK_SIZE 2048        // Size of 1 block of samples in amount of elements
+#define DATA_BLOCK_SIZE 4096        // Size of 1 block of samples in amount of elements
                                     /* Requirements for this value:
 
                                             Must not exeed CONFIG_DSP_MAX_FFT_SIZE (set as "Maximum FFT length" in menuconfig)

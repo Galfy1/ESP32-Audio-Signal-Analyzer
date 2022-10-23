@@ -8,10 +8,10 @@
 
 
 
-void ecep_packet_handler_task()
-void ecep_uart_event_task()
+void ecep_packet_handler_task();
+void ecep_uart_event_task();
 
-void ecep_uart_init()
+void ecep_uart_init();
 
 
 
