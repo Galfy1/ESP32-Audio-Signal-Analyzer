@@ -24,8 +24,8 @@ static const char *ADC_TAG = "ADC.C";
 #define ADC_2_CHANNEL       ADC_CHANNEL_6 // GPIO 17
 
 #define ADC_CONV_MODE       ADC_CONV_BOTH_UNIT
-#define ADC_ATTEN_DB        ADC_ATTEN_DB_2_5
-#define ADC_SAMPLING_FREQ   80 * 1000               // see soc caps file for max value
+#define ADC_ATTEN_DB        ADC_ATTEN_DB_6
+#define ADC_SAMPLING_FREQ   SAMPLING_FREQ
 #define CONV_FRAME_SIZE     256  // In bytes
 
 static float * gs_pf32_adc1_shared;
@@ -173,7 +173,7 @@ void adc_task()
                                 {
                                     memcpy(gs_pf32_adc1_shared, gs_af32_adc1_temp_buf, sizeof(gs_af32_adc1_temp_buf));
                                     xSemaphoreGive(gs_adc1_shared_mem_sem);
-                                    xTaskNotifyGive(gs_dsp_left_task_handle);    // Use direct task notification to syncronize use of the shared memory
+                                    xTaskNotifyGive(gs_dsp_left_task_handle); // Use direct task notification to syncronize use of the shared memory
                                 }
                             }
                         }

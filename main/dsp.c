@@ -17,7 +17,7 @@
 static const char *ADC_TAG = "DSP.C";
 
 #define RADIX_USED         radix2           // eFFT_radix_type_t   (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
-#define FFT_OUTPUT_FORMAT  ampltitude_db    // eFFT_output_form_t
+#define FFT_OUTPUT_FORMAT  ampltitude    // eFFT_output_form_t
 #define WINDOW_TYPE        hann             // eFFT_window_type_t
 
 static float * gs_pf32_adc1_shared;
@@ -37,10 +37,38 @@ static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};
 __attribute__((aligned(16))) 
 static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};  
 
+// Stores the latest center frequency indexes and values:
+static int32_t gs_i32_L_cent_freq_idx;
+static int32_t gs_i32_R_cent_freq_idx;
+static float   gs_f32_L_cent_freq_val;
+static float   gs_f32_R_cent_freq_val;
+
 
 // FOR FFT TEST:
 // __attribute__((aligned(16)))
 // float x1[DATA_BLOCK_SIZE];
+
+// inputs: array, array_soze
+// Outputs: p_cent_freq_idx, p_cent_freq_val
+void find_cent_freq(float * array, int32_t array_size, int32_t * p_cent_freq_idx, float * p_cent_freq_val)
+{
+    float temp_val;
+    float biggest_val = 0;
+    int32_t biggest_val_index = 0xFFFFFF;
+
+    for(int32_t i = 0 ; i < array_size ; i++)
+    {
+        temp_val = array[i];
+        if(temp_val > biggest_val)
+        {
+            biggest_val = temp_val;
+            biggest_val_index = i;
+        }
+    }
+    *p_cent_freq_idx = biggest_val_index;
+    *p_cent_freq_val = biggest_val;
+    //ESP_LOGI(ADC_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
+}
 
 
 void dsp_left_ch_task()
@@ -63,15 +91,23 @@ void dsp_left_ch_task()
     // dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
     // ---FFT TEST END---
 
-    int32_t ret;
+    uint32_t ret;
+
+    uint32_t testy_counter = 0;
+    uint32_t testy_sum = 0;
 
     while(1)
     {  
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY); /* Block this task untill triggeret by adc task.
+        ret = ulTaskNotifyTake(pdTRUE, portMAX_DELAY); /* Block this task untill triggeret by adc task.
                                                     It is okay if the ESP is not fast enough finish its DSP processing berfore a new adc data block arrives.
                                                     It will simply miss an adc data block and take the newest instead.
                                                     (effectivly lowerering the FFT result refresh rate. The refresh rate is however still plenty fast for our purpose)
                                                  */ 
+        if(ret > 1)
+        {
+            ESP_LOGE(ADC_TAG, "Left dsp task is too slow! Number of missed ADC blocks: %d", (int) (ret-1));
+        }
+         
 
         if(xSemaphoreTake(gs_adc1_shared_mem_sem, portMAX_DELAY) == pdTRUE)
         {
@@ -79,14 +115,46 @@ void dsp_left_ch_task()
             memset(gs_pf32_adc1_shared, 0, sizeof(gs_af32_adc1_temp_buf));  // Reset the shared memory, just to be sure (gs_af32_adc1_temp_buf is same size as shared space array)
             xSemaphoreGive(gs_adc1_shared_mem_sem);
             
-            //ESP_LOGI(ADC_TAG, "WUHUUU: %f" , gs_af32_adc1_temp_buf[0]);
+            //ESP_LOGI(ADC_TAG, "ADC1 Read Voltage: %f" , gs_af32_adc1_temp_buf[0]);
             
             // for(int32_t i = 0 ; i <= DATA_BLOCK_SIZE ; i += 1)
             // {
             //     ESP_LOGI(ADC_TAG, "WUHUUU %d: %f" , (int)i, gs_af32_adc1_temp_buf[i]);
             // }
 
-            fft_wrapper_start_fft_1real_fast(gs_af32_adc1_temp_buf, RADIX_USED, FFT_OUTPUT_FORMAT); // Run FFT
+            // Run FFT:
+            fft_wrapper_start_fft_1real_fast(gs_af32_adc1_temp_buf, RADIX_USED, FFT_OUTPUT_FORMAT);
+            
+            //Remove DC-offset (DC-offset was added by our hardware. aka not a part of the original signal)
+            gs_af32_adc1_temp_buf[0] = 0;
+            gs_af32_adc1_temp_buf[1] = 0;
+
+
+            // Find center frequency:
+            find_cent_freq(gs_af32_adc1_temp_buf, DATA_BLOCK_SIZE/2, &gs_i32_L_cent_freq_idx, &gs_f32_L_cent_freq_val);
+
+            // Test stuff:
+
+            testy_counter++;
+            if(testy_counter == 40)
+            {
+                testy_counter = 0;
+                //dsps_view_spectrum(gs_af32_adc1_temp_buf, DATA_BLOCK_SIZE/2, 0, 55); // for debugging
+                ESP_LOGI(ADC_TAG, "Center freq idx: %i" , (int) gs_i32_L_cent_freq_idx);
+                ESP_LOGI(ADC_TAG, "Center freq val: %f" , gs_f32_L_cent_freq_val);
+
+                for(int i = DATA_BLOCK_SIZE/12 ; i < DATA_BLOCK_SIZE/6 ; i++)
+                {   
+                    testy_sum += gs_af32_adc1_temp_buf[i];
+                    //ESP_LOGI(ADC_TAG, "FFT Index %d: %f", i, gs_af32_adc1_temp_buf[i]);
+                }
+                 ESP_LOGI(ADC_TAG, "TESTY SUM: %d", (int)testy_sum);
+                 testy_sum = 0;
+
+            }
+
+
+            // Test stuff end
 
             if(xSemaphoreTake(gs_fft_L_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
             {
