@@ -98,11 +98,8 @@ void dsp_left_ch_task()
 
     while(1)
     {  
-        ret = ulTaskNotifyTake(pdTRUE, portMAX_DELAY); /* Block this task untill triggeret by adc task.
-                                                    It is okay if the ESP is not fast enough finish its DSP processing berfore a new adc data block arrives.
-                                                    It will simply miss an adc data block and take the newest instead.
-                                                    (effectivly lowerering the FFT result refresh rate. The refresh rate is however still plenty fast for our purpose)
-                                                 */ 
+        ret = ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Block this task untill triggeret by adc task.
+
         if(ret > 1)
         {
             ESP_LOGE(ADC_TAG, "Left dsp task is too slow! Number of missed ADC blocks: %d", (int) (ret-1));

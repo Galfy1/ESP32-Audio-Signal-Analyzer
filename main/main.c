@@ -27,7 +27,7 @@ See: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/s
 static float gs_af32_adc1_shared[DATA_BLOCK_SIZE] = {0};  // Shared memory ADC1 (Left mic ch.)
 static float gs_af32_adc2_shared[DATA_BLOCK_SIZE] = {0};  // Shared memory ADC2 (Right mic ch.)
 
-static float gs_af32_L_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of post proceesed FFT output from DSP task (Left mic ch.)
+static float gs_af32_L_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of post proceesed FFT output from DSP task (Left mic ch.)  // SKAL MÅSKE HEDE DSP RES I STEDET??
 static float gs_af32_R_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of post proceesed FFT output from DSP task (Right mic ch.)
 
 

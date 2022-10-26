@@ -75,9 +75,9 @@ void adc_task()
 
     esp_err_t ret;
     uint32_t ret_num = 0;       
-    uint8_t result[CONV_FRAME_SIZE] = {0};
+    uint8_t conv_frame[CONV_FRAME_SIZE] = {0};
     
-    memset(result, 0xcc, CONV_FRAME_SIZE);  // ikke sikker på hvorfor vi sætter dem til 0xcc (0b11001100)
+    memset(conv_frame, 0xcc, sizeof(conv_frame));  // ikke sikker på hvorfor vi sætter dem til 0xcc (0b11001100)
 
     int32_t i32_adc1_idx_counter = 0;
     int32_t i32_adc2_idx_counter = 0;
@@ -149,12 +149,12 @@ void adc_task()
 
         while(1)
         {
-            ret = adc_continuous_read(adc_handle, result, CONV_FRAME_SIZE, &ret_num, 0);
+            ret = adc_continuous_read(adc_handle, conv_frame, CONV_FRAME_SIZE, &ret_num, 0);
             if (ret == ESP_OK) 
             {
                 for(int32_t i = 0 ; i < ret_num; i += SOC_ADC_DIGI_RESULT_BYTES)
                 {
-                    adc_digi_output_data_t *p_conv_res = (void*)&result[i]; // make a pointer for each conversion result of type adc_digi_output_data_t so its associated variables can be accessed
+                    adc_digi_output_data_t *p_conv_res = (void*)&conv_frame[i]; // make a pointer for each conversion conv_frame of type adc_digi_output_data_t so its associated variables can be accessed
                     if (check_valid_data(p_conv_res)) {
                         //ESP_LOGI(ADC_TAG, "Unit: %d,_Channel: %d, Value: %x", p_conv_res->type2.unit+1, p_conv_res->type2.channel, p_conv_res->type2.data);
 
@@ -251,8 +251,8 @@ void adc_task()
 
 
 
-// // param [out]: pu16_adc_buf_left  pointer to result buffer created by adc.c
-// // param [out]: i32_res_buffer_len  length of result buffer. (in amount of elements of type uint16_t)
+// // param [out]: pu16_adc_buf_left  pointer to conv_frame buffer created by adc.c
+// // param [out]: i32_res_buffer_len  length of conv_frame buffer. (in amount of elements of type uint16_t)
 // void adc_init(uint16_t * pu16_adc_buf_left, uint16_t * pu16_adc_buf_right, int32_t i32_res_buffer_len, QueueHandle_t xQueue_adc_full_left, QueueHandle_t xQueue_adc_full_right)     
 // {
 

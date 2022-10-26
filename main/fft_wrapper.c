@@ -173,6 +173,7 @@ static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
 
 // Makes use of the effecieny techniques for real input signals.
 // Allows for the use of the "fast" labeled FFT wrapper functions
+// HOV: DEN HVOR MAN LAVER 1FFT TIL 2 REAL INPUTS SKAL BRUGE i32_N STØRRELSE..: IKKE i32_N/2 SOM VI GØR HER... AKA VI KAN IKKE BRUGE DEN TEKNIK MED DENNE INIT FUNKTION
 esp_err_t fft_wrapper_init_fast(eFFT_window_type_t eFFT_window_type)
 {
     esp_err_t ret;
