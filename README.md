@@ -1,32 +1,57 @@
-# _Sample project_
+# _Audio Signal Analyzer for ESP32-S3_
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+## About
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+ASD
 
+## How to use this project in VS Code with Espressif IDF extension
+1. Clone this repository 
+2. Initianlize and update the ESP-DSP submodule:
+    1. Run "git submodule init" git command
+    2. Run "git submodule update" git command
+3. Run the following command from the vscode command pallette (Ctrl-Shift-P):
+    1. ESP-IDF: Add vscode configuration folder
+4. Use the Espressif IDF extension bar at the buttom of VS Code to build and flash. Monitoring via the "USB-to-UART" port on the ESP32-S3-DevKitC-1 is not possible for this project since UART0 is repurposed for ECEP (a custom command event protocol). For monitoring / debug-console please use GPIO ASD(RX) and GPIO ASD(TX).
+ 
+(An alternative to step 1 and 2 is to pass --recurse-submodules to the git clone command. This will automatically initialize and update each submodule in the repository)
 
+## Required Hardware
+This project is created for the ESP32-S3
+(ESP32-S3-DEVKITC-1-N8R8 was used in the development)
 
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
+## List of menuconfig changes:
+CPU frequency:      240MHz (default is 160MHz) \
+Maximum FFT length: 2048   (default is 4096) 
 
-## Example folder contents
+## ESP-IDF Version
+This project is created on ESP-IDF 5.0
 
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
+## EspressIf documentation
+ESP32-S3 Programming guide:
+- https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/hw-reference/index.html
 
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
+ESP32-S3 Technical Reference Manual:
+- https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf
 
-Below is short explanation of remaining files in the project folder.
+ESP32-S3 Datasheet:
+- https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf 
 
-```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+ESP32-S3-DevKitC-1 page:
+- https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/hw-reference/esp32s3/user-guide-devkitc-1-v1.0.html 
+
+ESP-IDF Github:
+- https://github.com/espressif/esp-idf
+
+ESP-DSP (DSP library) Github:
+- https://github.com/espressif/esp-dsp 
+
+### Related documents
+
+ESP32-S3 Hardware Design Guidelines:
+- https://www.espressif.com/sites/default/files/documentation/esp32-s3_hardware_design_guidelines_en.pdf 
+
+ESP32-S3-WROOM-1 & ESP32-S3-WROOM-1U Datasheet:
+- https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf 
+
+ESP32-S3-WROOM-2 Datasheet:
+- https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-2_datasheet_en.pdf 
