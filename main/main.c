@@ -11,6 +11,7 @@
 #include "adc.h"
 #include "dsp.h"
 #include "ecep_uart.h"
+#include "patient_response.h"
 
 static const char *TAG = "main.c";
 
@@ -87,6 +88,7 @@ void app_main(void)
                                                                                 This is done so the adc task can use direct task notification to syncronize use of the shared memory
                                                                              */ 
     xTaskCreatePinnedToCore(adc_task, "adc_task", 4096, NULL, 8, NULL, 1); // Use core 1 
+    xTaskCreatePinnedToCore(patient_resp_task, "patient_resp_task", 4096, NULL, 4, NULL, 1); // Use core 1.                                                           
     //xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
     //xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 4096, NULL, 4, NULL, 1);
 
