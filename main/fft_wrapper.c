@@ -9,11 +9,17 @@
 
 static const char *TAG = "fft_wrapper"; 
 
-#define DEFAULT_WIND = hann;
 
-int32_t i32_N = DATA_BLOCK_SIZE;  
+static eFFT_hw_gain_stage_t gs_hw_gain_stage;
 
-static bool gs_init_called          = false;
+static float gs_max_adc_val_mv;
+static float gs_up_to_90dB_SPL_sf;     // Scaling factor for amplitude output when using a microphone preamp so that the max ADC value equals 120db SPL
+static float gs_up_to_120dB_SPL_sf;    // Scaling factor for amplitude output when using a microphone preamp so that the max ADC value equals 90db SPL
+static float gs_dB_SPL_scaling_factor;
+
+static int32_t i32_N = DATA_BLOCK_SIZE;    // gs_ FORAN??? måske kand andet end N, da det ikke er bin størrelsen
+
+static bool gs_init_called = false;
 
 // Window coefficients:
 __attribute__((aligned(16))) 
@@ -32,8 +38,9 @@ static float gs_af32_wind[DATA_BLOCK_SIZE];
 
 
 /**
- * @brief Convert complex fft result to real amplitude values
+ * @brief Convert complex fft result to real amplitude values. 
  *        (See page 103 in "Digital Signal Processing: Fundamentals and Applications 3ed." for the math)
+ *        SKRIV AT OUTPUT ER mV fra 0 - 1750 HVIS OUPUTTET IKKE ER DB. OG DB SPL HVIS DET ER 
  * 
  * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
  * @param[in] i32_bin_size amount of complex values in fft result array
@@ -142,7 +149,7 @@ static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
 }
 
 
-esp_err_t fft_wrapper_init_tech3()
+esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
 {
     esp_err_t ret;
 
@@ -160,7 +167,32 @@ esp_err_t fft_wrapper_init_tech3()
         return ret;
     }
 
-    generate_window(DEFAULT_WIND);
+    generate_window(eFFT_window_type);
+    gs_hw_gain_stage = eFFT_hw_gain_stage;
+
+    switch(ADC_ATTEN_DB)
+    {
+        case ADC_ATTEN_DB_0:
+            gs_max_adc_val_mv = 950.0;
+            break;
+        case ADC_ATTEN_DB_2_5:
+            gs_max_adc_val_mv = 1250.0;
+            break;
+        case ADC_ATTEN_DB_6:
+            gs_max_adc_val_mv = 1750.0;
+            break;
+        case ADC_ATTEN_DB_11:
+            gs_max_adc_val_mv = 3100.0;
+            break;
+        default:
+            break;
+    }
+
+    gs_up_to_90dB_SPL_sf  = 1000000.0  / gs_max_adc_val_mv;  // (120dB --> 1,000,000)  
+    gs_up_to_120dB_SPL_sf = 31622.7766 / gs_max_adc_val_mv;  // (120dB --> 31622.7766)  
+
+    ESP_LOGE(TAG, "gs_up_to_90dB_SPL_sf: %f", gs_up_to_90dB_SPL_sf); // DEBUGGING
+    ESP_LOGE(TAG, "gs_up_to_120dB_SPL_sf: %f", gs_up_to_120dB_SPL_sf); // DEBUGGING
 
     gs_init_called = true;
     return ESP_OK;
@@ -176,6 +208,20 @@ esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
     }
 
     generate_window(eFFT_window_type);
+    return ESP_OK;
+}
+
+esp_err_t fft_wrapper_set_hw_gain_stage(eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+{
+    if(gs_init_called == false)
+    {
+        ESP_LOGE(TAG, "Error: fft_wrapper_set_hw_gain_stage() called before fft_wrapper_init()" );
+        return ESP_FAIL;
+    }
+
+    gs_hw_gain_stage = eFFT_hw_gain_stage;
+
+    return ESP_OK;
 }
 
 

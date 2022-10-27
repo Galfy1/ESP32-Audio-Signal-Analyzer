@@ -17,8 +17,9 @@
 static const char *ADC_TAG = "DSP.C";
 
 #define RADIX_USED         radix2           // eFFT_radix_type_t   (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
-#define FFT_OUTPUT_FORMAT  ampltitude    // eFFT_output_form_t
-#define WINDOW_TYPE        hann             // eFFT_window_type_t
+#define FFT_OUTPUT_FORMAT  ampltitude       // eFFT_output_form_t     
+#define DEFAULT_WIND       hann             // eFFT_window_type_t     Default window type 
+#define DEFAULT_HW_G_STAGE up_to_90dB_SPL   // eFFT_hw_gain_stage_t   Default Hardware Gain stage
 
 static float * gs_pf32_adc1_shared;
 static float * gs_pf32_adc2_shared;
@@ -120,7 +121,7 @@ void dsp_left_ch_task()
             // }
 
             // Run FFT:
-            fft_wrapper_start_fft_1real_fast(gs_af32_adc1_temp_buf, RADIX_USED, FFT_OUTPUT_FORMAT);
+            fft_wrapper_run_fft_tech3(gs_af32_adc1_temp_buf, RADIX_USED, FFT_OUTPUT_FORMAT);
             
             //Remove DC-offset (DC-offset was added by our hardware. aka not a part of the original signal)
             gs_af32_adc1_temp_buf[0] = 0;
@@ -190,7 +191,7 @@ void dsp_right_ch_task()
             memset(gs_pf32_adc2_shared, 0, sizeof(gs_af32_adc2_temp_buf));  // Reset the shared memory
             xSemaphoreGive(gs_adc2_shared_mem_sem);
 
-            fft_wrapper_start_fft_1real_fast(gs_af32_adc2_temp_buf, RADIX_USED, FFT_OUTPUT_FORMAT); // Run FFT
+            fft_wrapper_run_fft_tech3(gs_af32_adc2_temp_buf, RADIX_USED, FFT_OUTPUT_FORMAT); // Run FFT
             if(xSemaphoreTake(gs_fft_R_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
             {
                 memcpy(gs_pf32_R_fft_res_shr, gs_af32_adc2_temp_buf, sizeof(gs_af32_adc2_temp_buf)/2); // Copy FFT result from local copy to shared memory
@@ -203,7 +204,7 @@ void dsp_right_ch_task()
     }
 }
 
-
+//Måske lav de inputs her til en struct? idk den er ret lang
 void dsp_init(float * pf32_adc1_shared, 
               float * pf32_adc2_shared, 
               SemaphoreHandle_t adc1_shared_mem_sem, 
@@ -223,5 +224,6 @@ void dsp_init(float * pf32_adc1_shared,
     gs_fft_L_res_shr_mem_sem = fft_L_res_shr_mem_sem;
     gs_fft_R_res_shr_mem_sem = fft_R_res_shr_mem_sem;
 
-    fft_wrapper_init_fast(WINDOW_TYPE);
+    fft_wrapper_init_tech3(DEFAULT_WIND, DEFAULT_HW_G_STAGE);
+    // SÆT HW GAIN STAGE GPIO TIL HVAD END DEFAULT_HW_G_STAGE ER
 }

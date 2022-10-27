@@ -24,9 +24,8 @@ static const char *ADC_TAG = "ADC.C";
 #define ADC_2_CHANNEL       ADC_CHANNEL_6 // GPIO 17
 
 #define ADC_CONV_MODE       ADC_CONV_BOTH_UNIT
-#define ADC_ATTEN_DB        ADC_ATTEN_DB_6
-#define ADC_SAMPLING_FREQ   SAMPLING_FREQ
 #define CONV_FRAME_SIZE     256  // In bytes
+// ADC_SAMPLING_FREQ and ADC_ATTEN_DB is located in common_defines.h
 
 static float * gs_pf32_adc1_shared;
 static float * gs_pf32_adc2_shared;
