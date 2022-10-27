@@ -99,6 +99,9 @@ static esp_err_t conv_fft_res_to_pow(float * pf32_data, int32_t i32_bin_size, bo
 }
 
 
+
+//LAV EN FUNKTON SÅ MAN KAN ÆNDRE VINDUE TYPEN
+//LIGE NU BLIVER DEN LAVET I INIT
 static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
 {
 
