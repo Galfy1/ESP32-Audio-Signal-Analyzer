@@ -3,10 +3,9 @@
 #define FFTWRAPPER_H_INCLUDED
 
 typedef enum{
-    ampltitude,
-    ampltitude_db,
-    power,
-    power_db,
+    ampltitude,         // return result as amplitude in mV 
+    ampltitude_db_spl,  // return result as amplitude in dB SPL
+    power,              // return result as power in mV 
 } eFFT_output_form_t;
 
 typedef enum {

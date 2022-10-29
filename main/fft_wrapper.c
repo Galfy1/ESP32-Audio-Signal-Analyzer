@@ -9,13 +9,26 @@
 
 static const char *TAG = "fft_wrapper"; 
 
-
-static eFFT_hw_gain_stage_t gs_hw_gain_stage;
+#define P0   0.000020  // dB SPL Reference in Pascal
 
 static float gs_max_adc_val_mv;
-static float gs_up_to_90dB_SPL_sf;     // Scaling factor for amplitude output when using a microphone preamp so that the max ADC value equals 120db SPL
-static float gs_up_to_120dB_SPL_sf;    // Scaling factor for amplitude output when using a microphone preamp so that the max ADC value equals 90db SPL
-static float gs_dB_SPL_scaling_factor;
+static eFFT_hw_gain_stage_t gs_current_gain_stage;  // Currently selected gain stage
+
+/* Procedure to get amplitude output in dB SPL:
+    1: Find the ratio between ADC input mV vs. Pascal from microphone
+       1: Use the expression for dB SPL to find the pascal value for a dB SPL value where the equavilent mV output is known  
+       2: Divide the known mV value with the newly found pascal value to get the ratio
+    2: Divide the amplitude values with this ratio to convert from mV to Pascal
+    3: Use the expression for dB SPL to find the dB SPL associated with amplitude value in Pascal (using the standard p0 value)
+
+    A more effecient way:
+    Instead of continously converting each amplitude value to pascal and later diving by p0, Let us instead convert p0 to mV once and use that to convert amplitude to dB SPL.
+    (the ratio p/p0 is the same in mV or Pascal as long as both are the same unit, and asuming a proportional relation between mV and Pascal)
+    This is done by multiplying p0 with the mV vs. Pascal ratio mentioned before.
+    This will result in a a new p0 value for each hardware gain stages
+*/
+static float gs_f32_p0_mv_90dB_stage;   // P0 value converted to mV for the "up to 90dB SPL" gain stage
+static float gs_f32_p0_mv_120dB_stage;  // P0 value converted to mV for the "up to 120dB SPL" gain stage
 
 static int32_t i32_N = DATA_BLOCK_SIZE;    // gs_ FORAN??? måske kand andet end N, da det ikke er bin størrelsen
 
@@ -44,25 +57,37 @@ static float gs_af32_wind[DATA_BLOCK_SIZE];
  * 
  * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
  * @param[in] i32_bin_size amount of complex values in fft result array
- * @param[in] b_result_in_db true = convert amplitude result to dB, false = dont convert amplitude result to dB
+ * @param[in] b_result_in_db true = return amplitude result in dB SPL, false = return amplitude result in mV 
  * @return esp_err_t 
  */
 static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db)
 {
+    float f32_p0_mv;
+
+    switch(gs_current_gain_stage)
+    {
+        case up_to_90dB_SPL:
+            f32_p0_mv = gs_f32_p0_mv_90dB_stage;
+            break;
+        case up_to_120dB_SPL:
+            f32_p0_mv = gs_f32_p0_mv_120dB_stage;
+            break;
+        default:
+            ESP_LOGE(TAG, "ERROR: in conv_fft_res_to_ampl() - Invalid param: current_gain_stage"); 
+            return ESP_ERR_INVALID_ARG;
+            break;
+    }
+
     if(b_result_in_db == true)
     {
-        //unsigned int start_amp_db = dsp_get_cpu_cycle_count(); // for benchmark
-        for(int i = 0; i < i32_bin_size; i++)
+        for(int i = 0; i < i32_bin_size; i++) // return amplitude result in dB SPL
         {
-            pf32_data[i] = 20 * log10f( sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / i32_bin_size);    // Ak = 1/N * sqrt(Real[X(k)]^2 + Imag[X(k)]^2)
-                                                                                                                                                                      // 20*log10() is used to convert Power to dB
-        }
-        //unsigned int stop_amp_db = dsp_get_cpu_cycle_count(); // for benchmark
-        // ESP_LOGI(TAG, "SPEED TEST, ampl_db:  %i", stop_amp_db-start_amp_db); // for benchmark
+            pf32_data[i] = 20 * log10f((sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / i32_bin_size) / f32_p0_mv);    // Ampli = sqrt(Real[X(k)]^2 + Imag[X(k)]^2) / N                                                                                                                                           
+        }                                                                                                                                                             // log10(0) is not a valid statement! (therefore add 0.0000001 to make sure the argument is never 0))
     }
     else
     {
-        for(int i = 0; i < i32_bin_size; i++)
+        for(int i = 0; i < i32_bin_size; i++) // return amplitude result in mV 
         {
             pf32_data[i] = sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / i32_bin_size;    // Ak = 1/N * sqrt(Real[X(k)]^2 + Imag[X(k)]^2)
         }
@@ -77,30 +102,14 @@ static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, b
  * 
  * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
  * @param[in] i32_bin_size amount of complex values in fft result array
- * @param[in] b_result_in_db true = convert power result to dB, false = dont convert power result to dB
  * @return esp_err_t 
  */
-static esp_err_t conv_fft_res_to_pow(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db)
+static esp_err_t conv_fft_res_to_pow(float * pf32_data, int32_t i32_bin_size)
 {
     // VED IKKE HVORFOR HAN DELER MED 2N I HANS OG IKKE N^2 SOM DER STÅR I BOGEN 
-
-    if(b_result_in_db == true)
+    for(int i = 0; i < i32_bin_size; i++)
     {
-        //unsigned int start_pow_db = dsp_get_cpu_cycle_count(); // for benchmark
-        for(int i = 0; i < i32_bin_size; i++)
-        {
-            pf32_data[i] = 10 * log10f( (pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / (i32_bin_size*i32_bin_size));    // Ak = 1/(N^2) * (Real[X(k)]^2 + Imag[X(k)]^2)
-                                                                                                                                                                                // 10*log10() is used to convert Power to dB
-        }
-        //unsigned int stop_pow_db = dsp_get_cpu_cycle_count(); // for benchmark
-        //ESP_LOGI(TAG, "SPEED TEST, pow_db:  %i", stop_pow_db-start_pow_db); // for benchmark
-    }
-    else
-    {
-        for(int i = 0; i < i32_bin_size; i++)
-        {
-            pf32_data[i] = (pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / (i32_bin_size*i32_bin_size);    // Ak = 1/(N^2) * (Real[X(k)]^2 + Imag[X(k)]^2)
-        }
+        pf32_data[i] = (pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / (i32_bin_size*i32_bin_size);    // Ak = 1/(N^2) * (Real[X(k)]^2 + Imag[X(k)]^2)
     }
 
     return ESP_OK;
@@ -142,6 +151,8 @@ static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
             break;
 
         default:
+            ESP_LOGE(TAG, "ERROR: in generate_window() - Invalid param: eFFT_window_type"); 
+            return ESP_ERR_INVALID_ARG;
             break;
     }
 
@@ -168,7 +179,6 @@ esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type, eFFT_hw_ga
     }
 
     generate_window(eFFT_window_type);
-    gs_hw_gain_stage = eFFT_hw_gain_stage;
 
     switch(ADC_ATTEN_DB)
     {
@@ -185,19 +195,23 @@ esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type, eFFT_hw_ga
             gs_max_adc_val_mv = 3100.0;
             break;
         default:
+            ESP_LOGE(TAG, "ERROR: invalid ADC_ATTEN_DB");
+            return ESP_FAIL;
             break;
     }
 
-    gs_up_to_90dB_SPL_sf  = 1000000.0  / gs_max_adc_val_mv;  // (120dB --> 1,000,000)  
-    gs_up_to_120dB_SPL_sf = 31622.7766 / gs_max_adc_val_mv;  // (120dB --> 31622.7766)  
+    gs_current_gain_stage = eFFT_hw_gain_stage;
 
-    ESP_LOGE(TAG, "gs_up_to_90dB_SPL_sf: %f", gs_up_to_90dB_SPL_sf); // DEBUGGING
-    ESP_LOGE(TAG, "gs_up_to_120dB_SPL_sf: %f", gs_up_to_120dB_SPL_sf); // DEBUGGING
+    gs_f32_p0_mv_90dB_stage = ((gs_max_adc_val_mv / 2) / (powf(10.0, 90.0/20.0)*P0)) * P0;    /* (see top of this file for explanation of the math)
+                                            Lp = 20*log10(p/p0)  -->  p = 10^(Lp/20)*p0 = 10^(90/20)*(20*10^(-6)) = 0.6324555320 Pa
+                                            mV_Pascal_ratio = (max_adc_mV / 2) / 0.6324555320 = 1383.496476   (Remember the input signal is DC biased. That is why max_adc_mV is divded by 2)
+                                            gs_f32_p0_mv_90dB_stage = mV_Pascal_ratio * p0 = 0.02766992952
+                                            */ 
+    gs_f32_p0_mv_120dB_stage = ((gs_max_adc_val_mv / 2) / (powf(10.0, 120.0/20.0)*P0)) * P0; 
 
     gs_init_called = true;
     return ESP_OK;
 }
-
 
 esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
 {
@@ -219,7 +233,13 @@ esp_err_t fft_wrapper_set_hw_gain_stage(eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
         return ESP_FAIL;
     }
 
-    gs_hw_gain_stage = eFFT_hw_gain_stage;
+    if((eFFT_hw_gain_stage != up_to_90dB_SPL) && (eFFT_hw_gain_stage != up_to_120dB_SPL)) // CHeck for valid input param
+    {
+        ESP_LOGE(TAG, "ERROR: in fft_wrapper_set_hw_gain_stage - Invalid param: eFFT_hw_gain_stage"); 
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    gs_current_gain_stage = eFFT_hw_gain_stage;
 
     return ESP_OK;
 }
@@ -300,7 +320,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t s_radix,
         return ret;
     }
 
-    // Extract amplitude/power and convert to dB if specified:
+    // Extract amplitude or power:
     switch(s_output_form)
     {
 
@@ -308,16 +328,12 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t s_radix,
             conv_fft_res_to_ampl(pf32_data, i32_N>>1, false);
             break;
 
-        case ampltitude_db:
+        case ampltitude_db_spl:
             conv_fft_res_to_ampl(pf32_data, i32_N>>1, true);
             break;
 
         case power:
-            conv_fft_res_to_pow(pf32_data, i32_N>>1, false) ;
-            break;
-
-        case power_db:
-            conv_fft_res_to_ampl(pf32_data, i32_N>>1, true);  // conv_fft_res_to_ampl in db gives same result as conv_fft_res_to_pow in db. However conv_fft_res_to_ampl is faster! (around 1095848 vs 576608 cycles)
+            conv_fft_res_to_pow(pf32_data, i32_N>>1);
             break;
 
         default:
