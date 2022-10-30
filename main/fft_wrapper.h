@@ -3,9 +3,9 @@
 #define FFTWRAPPER_H_INCLUDED
 
 typedef enum{
-    ampltitude,         // return result as amplitude in mV 
-    ampltitude_db_spl,  // return result as amplitude in dB SPL
-    power,              // return result as power in mV 
+    ampltitude_mV,      // return result as amplitude in mV 
+    ampltitude_dB_SPL,  // return result as amplitude in dB SPL
+    power_mV,           // return result as power in mV 
 } eFFT_output_form_t;
 
 typedef enum {
@@ -33,10 +33,9 @@ typedef enum {
  * @brief Initialize the FFT for acording to "technique 3" (technique 3 refers to using N/2 complex size fft with 1 real input sequency of size N)
  * 
  * @param eFFT_window_type Desired window type
- * @param eFFT_hw_gain_stage The used hardware gain stage
  * @return esp_err_t 
  */
-esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type, eFFT_hw_gain_stage_t eFFT_hw_gain_stage);
+esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type);
 
 
 /**
@@ -47,12 +46,13 @@ esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type, eFFT_hw_ga
  * 
  * @param[in,out] pf32_data: Pointer to Real input sequence of size DATA_BLOCK_SIZE. Real output of size DATA_BLOCK_SIZE/2 is places at same location.
  *                          (size here refers to the amount of float elements)
- * @param[in] s_radix: Desired FFT radix
- * @param[in] s_output_form: Desired output format
+ * @param[in] eFFT_radix_type: Desired FFT radix
+ * @param[in] eFFT_output_form: Desired output format
+ * @param eFFT_hw_gain_stage The used hardware gain stage (this param is only used if amplitude_dB_SPL is chosen as output form)
  * 
  * @return esp_err_t:  returns ESP_OK if sucessfull, else returns error. 
  */
-esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t s_radix, eFFT_output_form_t s_output_form);
+esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage);
 
 
 
@@ -63,19 +63,6 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t s_radix,
  * @return esp_err_t 
  */
 esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type);
-
-
-/**
- * @brief Used to tell the fft_wrapper files which hardware gain stage is used 
- *        (used if the hw gain stage is changed)
- * 
- * @param eFFT_hw_gain_stage The used hardware gain stage
- * @return esp_err_t 
- */
-esp_err_t fft_wrapper_set_hw_gain_stage(eFFT_hw_gain_stage_t eFFT_hw_gain_stage);
-
-
-
 
 
 #endif /*FFTWRAPPER_H_INCLUDED */

@@ -12,7 +12,7 @@ static const char *TAG = "fft_wrapper";
 #define P0   0.000020  // dB SPL Reference in Pascal
 
 static float gs_max_adc_val_mv;
-static eFFT_hw_gain_stage_t gs_current_gain_stage;  // Currently selected gain stage
+//static eFFT_hw_gain_stage_t gs_current_gain_stage;  // Currently selected gain stage
 
 /* Procedure to get amplitude output in dB SPL:
     1: Find the ratio between ADC input mV vs. Pascal from microphone
@@ -57,29 +57,30 @@ static float gs_af32_wind[DATA_BLOCK_SIZE];
  * 
  * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
  * @param[in] i32_bin_size amount of complex values in fft result array
- * @param[in] b_result_in_db true = return amplitude result in dB SPL, false = return amplitude result in mV 
+ * @param[in] b_result_in_db_spl true = return amplitude result in dB SPL, false = return amplitude result in mV 
+ * @param[in] eFFT_hw_gain_stage the currently used hardware gain stage (this param is only used if b_result_in_db_spl is set true)
  * @return esp_err_t 
  */
-static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db)
+static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db_spl, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
 {
     float f32_p0_mv;
 
-    switch(gs_current_gain_stage)
+    if(b_result_in_db_spl == true)
     {
-        case up_to_90dB_SPL:
-            f32_p0_mv = gs_f32_p0_mv_90dB_stage;
-            break;
-        case up_to_120dB_SPL:
-            f32_p0_mv = gs_f32_p0_mv_120dB_stage;
-            break;
-        default:
-            ESP_LOGE(TAG, "ERROR: in conv_fft_res_to_ampl() - Invalid param: current_gain_stage"); 
-            return ESP_ERR_INVALID_ARG;
-            break;
-    }
+        switch(eFFT_hw_gain_stage)
+        {
+            case up_to_90dB_SPL:
+                f32_p0_mv = gs_f32_p0_mv_90dB_stage;
+                break;
+            case up_to_120dB_SPL:
+                f32_p0_mv = gs_f32_p0_mv_120dB_stage;
+                break;
+            default:
+                ESP_LOGE(TAG, "ERROR: in conv_fft_res_to_ampl() - Invalid param: eFFT_hw_gain_stage"); 
+                return ESP_ERR_INVALID_ARG;
+                break;
+        }
 
-    if(b_result_in_db == true)
-    {
         for(int i = 0; i < i32_bin_size; i++) // return amplitude result in dB SPL
         {
             pf32_data[i] = 20 * log10f((sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / i32_bin_size) / f32_p0_mv);    // Ampli = sqrt(Real[X(k)]^2 + Imag[X(k)]^2) / N                                                                                                                                           
@@ -160,7 +161,7 @@ static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
 }
 
 
-esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type)
 {
     esp_err_t ret;
 
@@ -200,8 +201,6 @@ esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type, eFFT_hw_ga
             break;
     }
 
-    gs_current_gain_stage = eFFT_hw_gain_stage;
-
     gs_f32_p0_mv_90dB_stage = ((gs_max_adc_val_mv / 2) / (powf(10.0, 90.0/20.0)*P0)) * P0;    /* (see top of this file for explanation of the math)
                                             Lp = 20*log10(p/p0)  -->  p = 10^(Lp/20)*p0 = 10^(90/20)*(20*10^(-6)) = 0.6324555320 Pa
                                             mV_Pascal_ratio = (max_adc_mV / 2) / 0.6324555320 = 1383.496476   (Remember the input signal is DC biased. That is why max_adc_mV is divded by 2)
@@ -225,27 +224,8 @@ esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
     return ESP_OK;
 }
 
-esp_err_t fft_wrapper_set_hw_gain_stage(eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
-{
-    if(gs_init_called == false)
-    {
-        ESP_LOGE(TAG, "Error: fft_wrapper_set_hw_gain_stage() called before fft_wrapper_init()" );
-        return ESP_FAIL;
-    }
 
-    if((eFFT_hw_gain_stage != up_to_90dB_SPL) && (eFFT_hw_gain_stage != up_to_120dB_SPL)) // CHeck for valid input param
-    {
-        ESP_LOGE(TAG, "ERROR: in fft_wrapper_set_hw_gain_stage - Invalid param: eFFT_hw_gain_stage"); 
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    gs_current_gain_stage = eFFT_hw_gain_stage;
-
-    return ESP_OK;
-}
-
-
-esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t s_radix, eFFT_output_form_t s_output_form)
+esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
 {
     esp_err_t ret;
 
@@ -261,7 +241,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t s_radix,
         pf32_data[i] = pf32_data[i] * gs_af32_wind[i];
     }
 
-    switch(s_radix)
+    switch(eFFT_radix_type)
     {
         case radix4:
 
@@ -321,18 +301,18 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t s_radix,
     }
 
     // Extract amplitude or power:
-    switch(s_output_form)
+    switch(eFFT_output_form)
     {
 
-        case ampltitude:
-            conv_fft_res_to_ampl(pf32_data, i32_N>>1, false);
+        case ampltitude_mV:
+            conv_fft_res_to_ampl(pf32_data, i32_N>>1, false, 0);
             break;
 
-        case ampltitude_db_spl:
-            conv_fft_res_to_ampl(pf32_data, i32_N>>1, true);
+        case ampltitude_dB_SPL:
+            conv_fft_res_to_ampl(pf32_data, i32_N>>1, true, eFFT_hw_gain_stage);
             break;
 
-        case power:
+        case power_mV:
             conv_fft_res_to_pow(pf32_data, i32_N>>1);
             break;
 

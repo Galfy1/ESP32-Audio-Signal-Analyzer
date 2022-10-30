@@ -31,7 +31,7 @@
                                     // SKRIV OGSÅ I RAPOORTEN AF DEN HER VÆRDI SKAL VÆRE OVER 600 (se min maple fil hvor jeg berenger det) FOR AT FÅ EN HEL PERIODE AF DEN LAVESTE FREKVENS MED
                                        
 
-#define ADC_SAMPLING_FREQ   80 * 1000      // see soc caps file for max value (limited by the internal ADC's of the ESP32-S3) FLYT DEN UD FRA COMMON_DEFINS, HVIS DEN IKKE BRUGES AF ANDRE END ADC FILERNE
+#define ADC_SAMPLING_FREQ   80 * 1000      // see soc caps file for max value (limited by the internal ADC's of the ESP32-S3) 
 #define ADC_ATTEN_DB        ADC_ATTEN_DB_6
 
 
