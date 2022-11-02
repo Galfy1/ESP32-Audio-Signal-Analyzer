@@ -22,6 +22,7 @@ This project is created for the ESP32-S3
 ## List of menuconfig changes:
 CPU frequency:      240MHz (default is 160MHz) \
 Maximum FFT length: 2048   (default is 4096) 
+Bootloader log verbosity: No output (default is info)
 
 ## ESP-IDF Version
 This project is created on ESP-IDF 5.0

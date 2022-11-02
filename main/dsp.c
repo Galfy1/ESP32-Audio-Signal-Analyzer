@@ -20,14 +20,14 @@ static const char *ADC_TAG = "DSP.C";
 // Default user settings:
 #define DFLT_FFT_OUTPUT_FORMAT  ampltitude_dB_SPL  // eFFT_output_form_t     Default output format
 #define DFLT_WIND_USED          hann               // eFFT_window_type_t     Default window type 
-#define DFLT_FFT_RES_AVG_COUNT  5                  // Default amount of FFT result blocks to average before passing it on. 
+#define DFLT_FFT_AVG_MAX_COUNT  5                  // Default amount of FFT result blocks to average before passing it on. 
 #define DFLT_HW_GAIN_STAGE_L    up_to_90dB_SPL     // eFFT_hw_gain_stage_t   Default Hardware Gain stage for Left channel
 #define DFLT_HW_GAIN_STAGE_R    up_to_90dB_SPL     // eFFT_hw_gain_stage_t   Default Hardware Gain stage for Right channel
                            
 // Declare settings variables with default values:
 eFFT_output_form_t   gs_fft_out_format       = DFLT_FFT_OUTPUT_FORMAT;
 eFFT_window_type_t   gs_window_used          = DFLT_WIND_USED;
-int32_t              gs_i32_fft_res_avg_cnt  = DFLT_FFT_RES_AVG_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
+int32_t              gs_i32_fft_avg_max_cnt  = DFLT_FFT_AVG_MAX_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
 eFFT_hw_gain_stage_t gs_hw_gain_stage_L      = DFLT_HW_GAIN_STAGE_L;
 eFFT_hw_gain_stage_t gs_hw_gain_stage_R      = DFLT_HW_GAIN_STAGE_R;
 
@@ -73,7 +73,7 @@ float x1[DATA_BLOCK_SIZE];
 // IKKE TESTET:
 void calc_fft_duration_ms()
 {
-    gs_f32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * 1000.0 * DATA_BLOCK_SIZE * gs_i32_fft_res_avg_cnt;
+    gs_f32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * 1000.0 * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt;
 }
 
 // inputs: array, array_soze
@@ -103,7 +103,7 @@ void dsp_left_ch_task()
 {
 
     static float af32_L_fft_res_avg[DATA_BLOCK_SIZE/2] = {0};  // Place to compute the average of ASD amount of fft results (has to be static!)
-
+    static int32_t i32_avg_counter = 0;  // Counter to 
     // ---FFT TEST BEGIN---
     dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 1750.0, 0.7, 0);  // De hentyder i doc til at 1 er fny... MEN det argere mere somom at 1 er fs ogs 0.5 er fny...
     // for(int i = 0 ; i < 300 ; i++)
@@ -115,7 +115,7 @@ void dsp_left_ch_task()
     fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_dB_SPL, gs_hw_gain_stage_L);
     for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
     {   
-        ESP_LOGI(ADC_TAG, "X1 Index %d: %f", i, x1[i]);
+        //ESP_LOGI(ADC_TAG, "X1 Index %d: %f", i, x1[i]);
     }
     // First half of x1 is aplitude values. Second half is junk.
     dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
@@ -180,6 +180,23 @@ void dsp_left_ch_task()
             // }
 
             // Test stuff end
+
+            // Add result into averageing array:
+            for(int32_t i = 0 ; i < sizeof(af32_L_fft_res_avg) ; i++)
+            {
+                af32_L_fft_res_avg[i] += gs_af32_adc1_temp_buf[i];
+            }
+            i32_avg_counter++;
+
+            // If fft averageing is complete:
+            if(i32_avg_counter >= gs_i32_fft_avg_max_cnt) 
+            {
+                //Del arrayed med gs_i32_fft_avg_max_cnt
+                // tag semaphore og kopiere resultatet in i shared mem
+                // Reset counter
+                // Reset avg array
+            }
+
 
             if(xSemaphoreTake(gs_fft_L_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
             {
