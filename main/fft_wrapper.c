@@ -116,6 +116,37 @@ static esp_err_t conv_fft_res_to_pow(float * pf32_data, int32_t i32_bin_size)
     return ESP_OK;
 }
 
+esp_err_t conv_ampl_mv_to_ampl_db_spl(float * pf32_data, int32_t i32_bin_size, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+{
+    float f32_p0_mv;
+
+    if(gs_init_called == false)
+    {
+        ESP_LOGE(TAG, "Error: conv_ampl_mv_to_ampl_db_spl() called before fft_wrapper_init()" );
+        return ESP_FAIL;
+    }
+
+    switch(eFFT_hw_gain_stage)
+    {
+        case up_to_90dB_SPL:
+            f32_p0_mv = gs_f32_p0_mv_90dB_stage;
+            break;
+        case up_to_120dB_SPL:
+            f32_p0_mv = gs_f32_p0_mv_120dB_stage;
+            break;
+        default:
+            ESP_LOGE(TAG, "ERROR: in conv_ampl_mv_to_ampl_db_spl() - Invalid param: eFFT_hw_gain_stage"); 
+            return ESP_ERR_INVALID_ARG;
+            break;
+    }
+
+    for(int i = 0; i < i32_bin_size; i++)
+    {
+        pf32_data[i] = 20 * log10f(pf32_data[i] /  f32_p0_mv);
+    }
+
+    return ESP_OK;
+}
 
 static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
 {

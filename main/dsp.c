@@ -64,6 +64,8 @@ static float   gs_f32_L_cent_freq_val;
 static int32_t gs_i32_R_cent_freq_idx;
 static float   gs_f32_R_cent_freq_val;
 
+// For Spectral Estimation: Welch's method is used with 0% overlap 
+
 
 // FOR FFT TEST:
 __attribute__((aligned(16)))
@@ -105,17 +107,17 @@ void dsp_left_ch_task()
     static float af32_L_fft_res_avg[DATA_BLOCK_SIZE/2] = {0};  // Place to compute the average of ASD amount of fft results (has to be static!)
     static int32_t i32_avg_counter = 0;  // Counter to 
     // ---FFT TEST BEGIN---
-    dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 1750.0, 0.7, 0);  // De hentyder i doc til at 1 er fny... MEN det argere mere somom at 1 er fs ogs 0.5 er fny...
+    dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 875.0, 0.7, 0);  // De hentyder i doc til at 1 er fny... MEN det argere mere somom at 1 er fs ogs 0.5 er fny...
     // for(int i = 0 ; i < 300 ; i++)
     // {   
     //     ESP_LOGI(ADC_TAG, "X1 Index %d: %f", i, x1[i]);
     // }
     // KØR INIT OG FFT HER
     //fft_wrapper_init_fast(hann);
-    fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_dB_SPL, gs_hw_gain_stage_L);
+    fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_mV, gs_hw_gain_stage_L);
     for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
     {   
-        //ESP_LOGI(ADC_TAG, "X1 Index %d: %f", i, x1[i]);
+        ESP_LOGI(ADC_TAG, "X1 Index %d: %f", i, x1[i]);
     }
     // First half of x1 is aplitude values. Second half is junk.
     dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
@@ -150,14 +152,20 @@ void dsp_left_ch_task()
             // }
 
             // Run FFT:
-            fft_wrapper_run_fft_tech3(gs_af32_adc1_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage_L);
-            
+            if(gs_fft_out_format == ampltitude_dB_SPL)
+            {
+                fft_wrapper_run_fft_tech3(gs_af32_adc1_temp_buf, RADIX_USED, ampltitude_mV, 0); /*  We dont want to average the dB SPL results since they are logarithmic,
+                                                                                                    so we wait to convert to dB SPL untill after averageing) */
+            }
+            else
+            {
+                fft_wrapper_run_fft_tech3(gs_af32_adc1_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage_L);
+            }
             //Remove DC-offset (DC-offset was added by our hardware. aka not a part of the original signal)
             gs_af32_adc1_temp_buf[0] = 0;
             gs_af32_adc1_temp_buf[1] = 0;
 
-            // Find center frequency:
-            find_cent_freq(gs_af32_adc1_temp_buf, DATA_BLOCK_SIZE/2, &gs_i32_L_cent_freq_idx, &gs_f32_L_cent_freq_val);
+
 
             // Test stuff:
 
@@ -181,42 +189,50 @@ void dsp_left_ch_task()
 
             // Test stuff end
 
-            // Add result into averageing array:
-            for(int32_t i = 0 ; i < sizeof(af32_L_fft_res_avg) ; i++)
+            // Add result into averaging array (remember that only half of gs_af32_adc1_temp_buf is the result. rest is junk):
+            for(int32_t i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
             {
                 af32_L_fft_res_avg[i] += gs_af32_adc1_temp_buf[i];
             }
             i32_avg_counter++;
 
-            // If fft averageing is complete:
+            // If fft averaging is complete:
             if(i32_avg_counter >= gs_i32_fft_avg_max_cnt) 
             {
-                //Del arrayed med gs_i32_fft_avg_max_cnt
-                // tag semaphore og kopiere resultatet in i shared mem
-                // Reset counter
-                // Reset avg array
+                //Divide array by gs_i32_fft_avg_max_cnt to average:
+                for(int32_t i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
+                {
+                    af32_L_fft_res_avg[i] /= gs_i32_fft_avg_max_cnt;
+                }
+
+                // Converte averaged result to dB SPL if necessaery (remember that we originally requested the fft res in mV. This was so we could average them easily): 
+                if(gs_fft_out_format == ampltitude_dB_SPL) 
+                {
+                    conv_ampl_mv_to_ampl_db_spl(af32_L_fft_res_avg, DATA_BLOCK_SIZE/2, gs_hw_gain_stage_L);
+                }
+
+                // Find center frequency:
+                find_cent_freq(af32_L_fft_res_avg, DATA_BLOCK_SIZE/2, &gs_i32_L_cent_freq_idx, &gs_f32_L_cent_freq_val); // SKAL HAVE ANDRE INPUTS
+
+                // Copy FFT averaged result from local copy into shared memory:
+                if(xSemaphoreTake(gs_fft_L_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
+                {
+                    memcpy(gs_pf32_L_fft_res_shr, af32_L_fft_res_avg, sizeof(af32_L_fft_res_avg));                                                                  
+                    xSemaphoreGive(gs_fft_L_res_shr_mem_sem);
+                }
+
+                // Reset counter and averaging array:
+                i32_avg_counter = 0;
+                memset(af32_L_fft_res_avg, 0, sizeof(af32_L_fft_res_avg));
             }
 
-
-            if(xSemaphoreTake(gs_fft_L_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
-            {
-                memcpy(gs_pf32_L_fft_res_shr, gs_af32_adc1_temp_buf, sizeof(gs_af32_adc1_temp_buf)/2); // Copy FFT result from local copy to shared memory
-                                                                                                       // (Only half of gs_af32_adc1_temp_buf is the result. rest is junk)
-                xSemaphoreGive(gs_fft_L_res_shr_mem_sem);
-            }
         }
 
          // Print test:
-
-        
-
         //  for(int32_t i = 0 ; i <= sizeof(gs_af32_adc1_temp_buf) ; i += 100)
         //  {
         //     ESP_LOGI(ADC_TAG, "WUHUUU: %d" , gs_af32_adc1_temp_buf[i]);
         //  }
-
-
-         //vTaskDelay(1); // DEN HER SKAL NOK VÆK
     }
     
 }

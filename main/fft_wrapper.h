@@ -65,4 +65,8 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
 esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type);
 
 
+esp_err_t conv_ampl_mv_to_ampl_db_spl(float * pf32_data, int32_t i32_bin_size, eFFT_hw_gain_stage_t eFFT_hw_gain_stage);
+
+
+
 #endif /*FFTWRAPPER_H_INCLUDED */
