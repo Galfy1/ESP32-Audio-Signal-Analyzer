@@ -19,6 +19,8 @@ static const char *PATIENT_RESP_TAG = "patient_response.c";
 
 static uint8_t gs_u8_default_gpio_level = GPIO_LOW;
 
+static QueueHandle_t gs_xQueue_pr_cmd;
+
 
 static void patient_resp_hold()
 {   
@@ -118,6 +120,8 @@ void patient_resp_task()
 
 }
 
-void patient_resp_init(){
 
+void patient_resp_init(QueueHandle_t xQueue_pr_cmd)
+{
+    gs_xQueue_pr_cmd = xQueue_pr_cmd;
 }

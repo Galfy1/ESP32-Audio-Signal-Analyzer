@@ -12,6 +12,7 @@
 #include "dsp.h"
 #include "ecep_uart.h"
 #include "patient_response.h"
+#include "ecep_defines.h"
 
 static const char *TAG = "main.c";
 
@@ -47,12 +48,15 @@ void app_main(void)
     SemaphoreHandle_t fft_L_res_shr_mem_sem;
     SemaphoreHandle_t fft_R_res_shr_mem_sem;
 
+    QueueHandle_t xQueue_pr_cmd;
+
     TaskHandle_t dsp_left_task_handle;
     TaskHandle_t dsp_right_task_handle;
-
+    
     ESP_LOGI(TAG, "DET VIRKER :D");
-
+    
     //Create sempahores:
+
     adc1_shared_mem_sem = xSemaphoreCreateMutex();    // Mutex for gs_af32_adc1_shared
     adc2_shared_mem_sem = xSemaphoreCreateMutex();    // Mutex for gs_af32_adc2_shared
     fft_L_res_shr_mem_sem = xSemaphoreCreateMutex();  // Mutex for gs_af32_L_fft_res_shr  
@@ -60,6 +64,13 @@ void app_main(void)
     if( (adc1_shared_mem_sem == NULL) || (adc2_shared_mem_sem == NULL) || (fft_L_res_shr_mem_sem == NULL) || (fft_R_res_shr_mem_sem == NULL))
     {
         ESP_LOGE(TAG, "ERROR: while creating one or more semaphores");
+    }
+    
+    // Create queues:
+    xQueue_pr_cmd = xQueueCreate(10, sizeof(sIntern_command_t));
+    if ((xQueue_pr_cmd == NULL))
+    {
+        ESP_LOGE(TAG, "ERROR: while creating one or more queues");
     }
 
     // Init functions (has to run before creating tasks):

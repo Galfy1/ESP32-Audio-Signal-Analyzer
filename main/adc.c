@@ -31,14 +31,13 @@ static const char *ADC_TAG = "ADC.C";
 static float * gs_pf32_adc1_shared;
 static float * gs_pf32_adc2_shared;
 
-static TaskHandle_t gs_adc_task_handle;
-
 static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};  
 static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};  
 
 static SemaphoreHandle_t gs_adc1_shared_mem_sem;   
 static SemaphoreHandle_t gs_adc2_shared_mem_sem;
 
+static TaskHandle_t gs_adc_task_handle;
 static TaskHandle_t gs_dsp_left_task_handle;
 static TaskHandle_t gs_dsp_right_task_handle;
 
