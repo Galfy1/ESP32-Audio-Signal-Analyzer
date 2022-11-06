@@ -1,8 +1,10 @@
-
 #include <stdint.h> 
+#include <string.h>
 #include <math.h>
 
 #include "esp_dsp.h"
+#include "esp_log.h"
+#include "esp_heap_caps.h"
 
 #include "fft_wrapper.h"
 #include "common_defines.h"
@@ -30,8 +32,21 @@ static float gs_max_adc_val_mv;
 static float gs_f32_p0_mv_90dB_stage;   // P0 value converted to mV for the "up to 90dB SPL" gain stage
 static float gs_f32_p0_mv_120dB_stage;  // P0 value converted to mV for the "up to 120dB SPL" gain stage
 
-static int32_t i32_N = DATA_BLOCK_SIZE;    // gs_ FORAN??? måske kand andet end N, da det ikke er bin størrelsen
+// Window Correction Factors (used to correct for amplitude or energy distortion introduced by the window function):
+static float gs_f32_cf_hann_ampl;
+static float gs_f32_cf_hann_energy;
+static float gs_f32_cf_blackman_ampl;
+static float gs_f32_cf_blackman_energy;
+static float gs_f32_cf_blackman_harris_ampl;
+static float gs_f32_cf_blackman_harris_energy;
+static float gs_f32_cf_blackman_nuttall_ampl;
+static float gs_f32_cf_blackman_nuttall_energy;
+static float gs_f32_cf_nuttall_ampl;
+static float gs_f32_cf_nuttall_energy;
+static float gs_f32_cf_flat_top_ampl;
+static float gs_f32_cf_flat_top_energy;
 
+static int32_t i32_N = DATA_BLOCK_SIZE;    // gs_ FORAN??? måske kand andet end N, da det ikke er bin størrelsen
 static bool gs_init_called = false;
 
 // Window coefficients:
@@ -48,6 +63,62 @@ static float gs_af32_wind[DATA_BLOCK_SIZE];
 
 // Husk måske også lige at convert "x-aksen" fra bin nr til frekvens (skal måske ikke gøres her men et andet sted idk)
 // (se (4.26) på side 103 i ny dsp bog for denne formel)
+
+static float mean_of_float_array(float * p_f32_array, int32_t i32_array_size_in_elements)
+{
+    float f32_sum = 0;
+
+    for(int32_t i = 0 ; i<i32_array_size_in_elements ; i++)
+    {
+        f32_sum += p_f32_array[i];
+    }
+    return (f32_sum / (float)i32_array_size_in_elements); 
+}
+
+static float rms_of_float_array(float * p_f32_array, int32_t i32_array_size_in_elements)
+{
+    float f32_square = 0.0, f32_mean = 0.0, f32_root = 0.0;
+
+    // Sqaure each value and sum:
+    for(int32_t i = 0 ; i < i32_array_size_in_elements ; i++)
+    {
+        f32_square += pow(p_f32_array[i], 2);
+    }
+
+    // Mean the sum:
+    f32_mean = f32_square / (float)i32_array_size_in_elements;
+
+    // Root the mean:
+    f32_root = sqrtf(f32_mean);
+
+    return f32_root;
+}
+
+static esp_err_t calc_wind_correction_factors()
+{
+    //float af32_temp_wind_array[DATA_BLOCK_SIZE]; // Der er ikke plads til det array her!!!
+
+    float * pf32_temp_wind_array = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM); // (Located in PSRAM) 
+                                                                                                         // Array does not need to be 16bit aligned since speed is not of essence here
+    if(pf32_temp_wind_array == NULL)
+    {
+        ESP_LOGE(TAG, "ERROR: in calc_wind_correction_factors() while allocating pf32_temp_wind_array memory in PSRAM");
+    }
+    memset(pf32_temp_wind_array, 0 , DATA_BLOCK_SIZE * sizeof(float));    
+    // HUSK MÅSKE AT FREE() EFTER
+
+    // Hanning:
+    dsps_wind_hann_f32(pf32_temp_wind_array, i32_N);
+    gs_f32_cf_hann_ampl = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_f32_cf_hann_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+
+    // Blackman:
+
+
+    ESP_LOGE(TAG, "MUMS HANNING CORRECTION FACTOR ENERGY: %f" , gs_f32_cf_hann_energy);
+
+    return ESP_OK;
+}
 
 
 /**
@@ -192,57 +263,6 @@ static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
 }
 
 
-esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type)
-{
-    esp_err_t ret;
-
-    ret = dsps_fft2r_init_fc32(NULL, i32_N >> 1); // Half size FFT (amount of complex values)
-    if (ret  != ESP_OK)
-    {
-        ESP_LOGE(TAG, "ERROR: Not possible to initialize FFT2R. Error = %i", ret);
-        return ret;
-    }
-
-    ret = dsps_fft4r_init_fc32(NULL, i32_N >> 1); // Half size FFT (amount of complex values)
-    if (ret  != ESP_OK)
-    {
-        ESP_LOGE(TAG, "ERROR: Not possible to initialize FFT4R. Error = %i", ret);
-        return ret;
-    }
-
-    generate_window(eFFT_window_type);
-
-    switch(ADC_ATTEN_DB)
-    {
-        case ADC_ATTEN_DB_0:
-            gs_max_adc_val_mv = 950.0;
-            break;
-        case ADC_ATTEN_DB_2_5:
-            gs_max_adc_val_mv = 1250.0;
-            break;
-        case ADC_ATTEN_DB_6:
-            gs_max_adc_val_mv = 1750.0;
-            break;
-        case ADC_ATTEN_DB_11:
-            gs_max_adc_val_mv = 3100.0;
-            break;
-        default:
-            ESP_LOGE(TAG, "ERROR: invalid ADC_ATTEN_DB");
-            return ESP_FAIL;
-            break;
-    }
-
-    gs_f32_p0_mv_90dB_stage = ((gs_max_adc_val_mv / 2) / (powf(10.0, 90.0/20.0)*P0)) * P0;    /* (see top of this file for explanation of the math)
-                                            Lp = 20*log10(p/p0)  -->  p = 10^(Lp/20)*p0 = 10^(90/20)*(20*10^(-6)) = 0.6324555320 Pa
-                                            mV_Pascal_ratio = (max_adc_mV / 2) / 0.6324555320 = 1383.496476   (Remember the input signal is DC biased. That is why max_adc_mV is divded by 2)
-                                            gs_f32_p0_mv_90dB_stage = mV_Pascal_ratio * p0 = 0.02766992952
-                                            */ 
-    gs_f32_p0_mv_120dB_stage = ((gs_max_adc_val_mv / 2) / (powf(10.0, 120.0/20.0)*P0)) * P0; 
-
-    gs_init_called = true;
-    return ESP_OK;
-}
-
 esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
 {
     if(gs_init_called == false)
@@ -352,5 +372,58 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
             break;
     }
     
+    return ESP_OK;
+}
+
+
+esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type)
+{
+    esp_err_t ret;
+
+    ret = dsps_fft2r_init_fc32(NULL, i32_N >> 1); // Half size FFT (amount of complex values)
+    if (ret  != ESP_OK)
+    {
+        ESP_LOGE(TAG, "ERROR: Not possible to initialize FFT2R. Error = %i", ret);
+        return ret;
+    }
+
+    ret = dsps_fft4r_init_fc32(NULL, i32_N >> 1); // Half size FFT (amount of complex values)
+    if (ret  != ESP_OK)
+    {
+        ESP_LOGE(TAG, "ERROR: Not possible to initialize FFT4R. Error = %i", ret);
+        return ret;
+    }
+
+    generate_window(eFFT_window_type);
+
+    switch(ADC_ATTEN_DB)
+    {
+        case ADC_ATTEN_DB_0:
+            gs_max_adc_val_mv = 950.0;
+            break;
+        case ADC_ATTEN_DB_2_5:
+            gs_max_adc_val_mv = 1250.0;
+            break;
+        case ADC_ATTEN_DB_6:
+            gs_max_adc_val_mv = 1750.0;
+            break;
+        case ADC_ATTEN_DB_11:
+            gs_max_adc_val_mv = 3100.0;
+            break;
+        default:
+            ESP_LOGE(TAG, "ERROR: invalid ADC_ATTEN_DB");
+            return ESP_FAIL;
+            break;
+    }
+
+    gs_f32_p0_mv_90dB_stage = ((gs_max_adc_val_mv / 2) / (powf(10.0, 90.0/20.0)*P0)) * P0;    /* (see top of this file for explanation of the math)
+                                            Lp = 20*log10(p/p0)  -->  p = 10^(Lp/20)*p0 = 10^(90/20)*(20*10^(-6)) = 0.6324555320 Pa
+                                            mV_Pascal_ratio = (max_adc_mV / 2) / 0.6324555320 = 1383.496476   (Remember the input signal is DC biased. That is why max_adc_mV is divded by 2)
+                                            gs_f32_p0_mv_90dB_stage = mV_Pascal_ratio * p0 = 0.02766992952 */ 
+    gs_f32_p0_mv_120dB_stage = ((gs_max_adc_val_mv / 2) / (powf(10.0, 120.0/20.0)*P0)) * P0; 
+
+    calc_wind_correction_factors();
+
+    gs_init_called = true;
     return ESP_OK;
 }
