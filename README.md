@@ -22,7 +22,7 @@ This project is created for the ESP32-S3 \
 
 ## List of menuconfig changes:
 CPU frequency:      240MHz (default: 160MHz) \
-Maximum FFT length: 2048   (default: 4096) \
+Maximum FFT length: 4096   (default: 4096) \
 Bootloader log verbosity: No output (default: info) \
 Support for external, SPI-connected RAM: Enable (default: Disabled) (Ops: requires ESP32 module with PSRAM) \
 Mode (QUAD/OCT) of SPI RAM chip in use: Octal Mode PSRAM (Default: Quad mode PSRAM) (Ops: requires ESP32 module with support for Octal mode SPI PSRAM) \

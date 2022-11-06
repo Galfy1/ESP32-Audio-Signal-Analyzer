@@ -15,7 +15,7 @@
 
 static const char *DSP_TAG = "DSP.C";
 
-#define RADIX_USED              radix2             // eFFT_radix_type_t      (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
+#define RADIX_USED              radix4             // eFFT_radix_type_t      (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
 
 // Default user settings:
 #define DFLT_FFT_OUTPUT_FORMAT  ampltitude_dB_SPL  // eFFT_output_form_t     Default output format
