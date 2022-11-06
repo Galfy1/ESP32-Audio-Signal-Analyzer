@@ -13,7 +13,7 @@
 #include "common_defines.h"
 #include "fft_wrapper.h"
 
-static const char *ADC_TAG = "DSP.C";
+static const char *DSP_TAG = "DSP.C";
 
 #define RADIX_USED              radix2             // eFFT_radix_type_t      (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
 
@@ -97,30 +97,39 @@ void find_cent_freq(float * array, int32_t array_size, int32_t * p_cent_freq_idx
     }
     *p_cent_freq_idx = biggest_val_index;
     *p_cent_freq_val = biggest_val;
-    //ESP_LOGI(ADC_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
+    //ESP_LOGI(DSP_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
 }
 
 
 void dsp_left_ch_task()
 {
 
-    static float af32_L_fft_res_avg[DATA_BLOCK_SIZE/2] = {0};  // Place to compute the average of ASD amount of fft results (has to be static!)
-    static int32_t i32_avg_counter = 0;  // Counter to 
+    //static float af32_L_fft_res_avg[DATA_BLOCK_SIZE/2] = {0};  // A Place to compute the average of ASD amount of fft results (has to be static!)
+
+    // A Place to compute the averaged FFT result (located is PSRAM):
+    float * pf32_L_fft_res_avg_array =  heap_caps_malloc(DATA_BLOCK_SIZE/2 * sizeof(float), MALLOC_CAP_SPIRAM);
+    if(pf32_L_fft_res_avg_array == NULL)
+    {
+        ESP_LOGE(DSP_TAG, "ERROR: while allocating FFT res averaging array in PSRAM");
+    } 
+    memset(pf32_L_fft_res_avg_array, 0 ,DATA_BLOCK_SIZE/2 * sizeof(float));
+
+    static int32_t i32_avg_counter = 0;  
     // ---FFT TEST BEGIN---
-    dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 875.0, 0.7, 0);  // De hentyder i doc til at 1 er fny... MEN det argere mere somom at 1 er fs ogs 0.5 er fny...
-    // for(int i = 0 ; i < 300 ; i++)
+    // dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 875.0, 0.7, 0);  // De hentyder i doc til at 1 er fny... MEN det argere mere somom at 1 er fs ogs 0.5 er fny...
+    // // for(int i = 0 ; i < 300 ; i++)
+    // // {   
+    // //     ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);
+    // // }
+    // // KØR INIT OG FFT HER
+    // //fft_wrapper_init_fast(hann);
+    // fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_mV, gs_hw_gain_stage_L);
+    // for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
     // {   
-    //     ESP_LOGI(ADC_TAG, "X1 Index %d: %f", i, x1[i]);
+    //     ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);
     // }
-    // KØR INIT OG FFT HER
-    //fft_wrapper_init_fast(hann);
-    fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_mV, gs_hw_gain_stage_L);
-    for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
-    {   
-        ESP_LOGI(ADC_TAG, "X1 Index %d: %f", i, x1[i]);
-    }
-    // First half of x1 is aplitude values. Second half is junk.
-    dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
+    // // First half of x1 is aplitude values. Second half is junk.
+    // dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
     // ---FFT TEST END---
 
     uint32_t ret;
@@ -134,7 +143,7 @@ void dsp_left_ch_task()
 
         if(ret > 1)
         {
-            ESP_LOGE(ADC_TAG, "Left dsp task is too slow! Number of missed ADC blocks: %d", (int) (ret-1));
+            ESP_LOGE(DSP_TAG, "Left dsp task is too slow! Number of missed ADC blocks: %d", (int) (ret-1));
         }
          
 
@@ -144,11 +153,11 @@ void dsp_left_ch_task()
             memset(gs_pf32_adc1_shared, 0, sizeof(gs_af32_adc1_temp_buf));  // Reset the shared memory, just to be sure (gs_af32_adc1_temp_buf is same size as shared space array)
             xSemaphoreGive(gs_adc1_shared_mem_sem);
             
-            //ESP_LOGI(ADC_TAG, "ADC1 Read Voltage: %f" , gs_af32_adc1_temp_buf[0]);
+            ESP_LOGI(DSP_TAG, "ADC1 Read Voltage: %f" , gs_af32_adc1_temp_buf[0]);
             
             // for(int32_t i = 0 ; i <= DATA_BLOCK_SIZE ; i += 1)
             // {
-            //     ESP_LOGI(ADC_TAG, "WUHUUU %d: %f" , (int)i, gs_af32_adc1_temp_buf[i]);
+            //     ESP_LOGI(DSP_TAG, "WUHUUU %d: %f" , (int)i, gs_af32_adc1_temp_buf[i]);
             // }
 
             // Run FFT:
@@ -174,15 +183,15 @@ void dsp_left_ch_task()
             // {
             //     testy_counter = 0;
             //     //dsps_view_spectrum(gs_af32_adc1_temp_buf, DATA_BLOCK_SIZE/2, 0, 55); // for debugging
-            //     ESP_LOGI(ADC_TAG, "Center freq idx: %i" , (int) gs_i32_L_cent_freq_idx);
-            //     ESP_LOGI(ADC_TAG, "Center freq val: %f" , gs_f32_L_cent_freq_val);
+            //     ESP_LOGI(DSP_TAG, "Center freq idx: %i" , (int) gs_i32_L_cent_freq_idx);
+            //     ESP_LOGI(DSP_TAG, "Center freq val: %f" , gs_f32_L_cent_freq_val);
 
             //     // for(int i = DATA_BLOCK_SIZE/12 ; i < DATA_BLOCK_SIZE/6 ; i++)
             //     // {   
             //     //     testy_sum += gs_af32_adc1_temp_buf[i];
-            //     //     //ESP_LOGI(ADC_TAG, "FFT Index %d: %f", i, gs_af32_adc1_temp_buf[i]);
+            //     //     //ESP_LOGI(DSP_TAG, "FFT Index %d: %f", i, gs_af32_adc1_temp_buf[i]);
             //     // }
-            //     //  ESP_LOGI(ADC_TAG, "TESTY SUM: %d", (int)testy_sum);
+            //     //  ESP_LOGI(DSP_TAG, "TESTY SUM: %d", (int)testy_sum);
             //     //  testy_sum = 0;
 
             // }
@@ -192,7 +201,7 @@ void dsp_left_ch_task()
             // Add result into averaging array (remember that only half of gs_af32_adc1_temp_buf is the result. rest is junk):
             for(int32_t i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
             {
-                af32_L_fft_res_avg[i] += gs_af32_adc1_temp_buf[i];
+                pf32_L_fft_res_avg_array[i] += gs_af32_adc1_temp_buf[i];
             }
             i32_avg_counter++;
 
@@ -202,28 +211,28 @@ void dsp_left_ch_task()
                 //Divide array by gs_i32_fft_avg_max_cnt to average:
                 for(int32_t i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
                 {
-                    af32_L_fft_res_avg[i] /= gs_i32_fft_avg_max_cnt;
+                    pf32_L_fft_res_avg_array[i] /= gs_i32_fft_avg_max_cnt;
                 }
 
                 // Converte averaged result to dB SPL if necessaery (remember that we originally requested the fft res in mV. This was so we could average them easily): 
                 if(gs_fft_out_format == ampltitude_dB_SPL) 
                 {
-                    conv_ampl_mv_to_ampl_db_spl(af32_L_fft_res_avg, DATA_BLOCK_SIZE/2, gs_hw_gain_stage_L);
+                    conv_ampl_mv_to_ampl_db_spl(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE/2, gs_hw_gain_stage_L);
                 }
 
                 // Find center frequency:
-                find_cent_freq(af32_L_fft_res_avg, DATA_BLOCK_SIZE/2, &gs_i32_L_cent_freq_idx, &gs_f32_L_cent_freq_val); // SKAL HAVE ANDRE INPUTS
+                find_cent_freq(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE/2, &gs_i32_L_cent_freq_idx, &gs_f32_L_cent_freq_val); // SKAL HAVE ANDRE INPUTS
 
                 // Copy FFT averaged result from local copy into shared memory:
                 if(xSemaphoreTake(gs_fft_L_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
                 {
-                    memcpy(gs_pf32_L_fft_res_shr, af32_L_fft_res_avg, sizeof(af32_L_fft_res_avg));                                                                  
+                    memcpy(gs_pf32_L_fft_res_shr, pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE/2 * sizeof(float));                                                                  
                     xSemaphoreGive(gs_fft_L_res_shr_mem_sem);
                 }
 
                 // Reset counter and averaging array:
                 i32_avg_counter = 0;
-                memset(af32_L_fft_res_avg, 0, sizeof(af32_L_fft_res_avg));
+                memset(pf32_L_fft_res_avg_array, 0, DATA_BLOCK_SIZE/2 * sizeof(float));
             }
 
         }
@@ -231,7 +240,7 @@ void dsp_left_ch_task()
          // Print test:
         //  for(int32_t i = 0 ; i <= sizeof(gs_af32_adc1_temp_buf) ; i += 100)
         //  {
-        //     ESP_LOGI(ADC_TAG, "WUHUUU: %d" , gs_af32_adc1_temp_buf[i]);
+        //     ESP_LOGI(DSP_TAG, "WUHUUU: %d" , gs_af32_adc1_temp_buf[i]);
         //  }
     }
     

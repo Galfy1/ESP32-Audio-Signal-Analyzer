@@ -32,8 +32,11 @@ static float * gs_pf32_adc2_shared;
 
 static TaskHandle_t gs_adc_task_handle;
 
-static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};  
-static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};  
+// static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};  
+// static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};  
+
+static float * gs_pf32_adc1_temp_buf; // (allocated in adc_init() and located in PSRAM)
+static float * gs_pf32_adc2_temp_buf; // (allocated in adc_init() and located in PSRAM)
 
 static SemaphoreHandle_t gs_adc1_shared_mem_sem;   
 static SemaphoreHandle_t gs_adc2_shared_mem_sem;
@@ -162,7 +165,7 @@ void adc_task()
                         {
                             adc_cali_raw_to_voltage(adc1_cali_handle, (int)(p_conv_res->type2.data), &adc1_temp_voltage);
 
-                            gs_af32_adc1_temp_buf[i32_adc1_idx_counter] = (float)adc1_temp_voltage;
+                            gs_pf32_adc1_temp_buf[i32_adc1_idx_counter] = (float)adc1_temp_voltage;
                             i32_adc1_idx_counter++;
 
                             if(i32_adc1_idx_counter > (DATA_BLOCK_SIZE - 1))  // SKAL LIGE TÆNKE OM DET VIRKER. NÅR DET ENE ER INDEX OG DET ANDET ER STØRELSE
@@ -170,7 +173,7 @@ void adc_task()
                                 i32_adc1_idx_counter =  0;
                                 if(xSemaphoreTake(gs_adc1_shared_mem_sem, portMAX_DELAY) == pdTRUE) // Binary sempahore used to mutual exclusion
                                 {
-                                    memcpy(gs_pf32_adc1_shared, gs_af32_adc1_temp_buf, sizeof(gs_af32_adc1_temp_buf));
+                                    memcpy(gs_pf32_adc1_shared, gs_pf32_adc1_temp_buf, DATA_BLOCK_SIZE * sizeof(float));
                                     xSemaphoreGive(gs_adc1_shared_mem_sem);
                                     xTaskNotifyGive(gs_dsp_left_task_handle); // Use direct task notification to syncronize use of the shared memory
                                 }
@@ -181,7 +184,7 @@ void adc_task()
                         {
                             adc_cali_raw_to_voltage(adc2_cali_handle, (int)(p_conv_res->type2.data), &adc2_temp_voltage);
 
-                            gs_af32_adc2_temp_buf[i32_adc1_idx_counter] = (float)adc2_temp_voltage;
+                            gs_pf32_adc2_temp_buf[i32_adc1_idx_counter] = (float)adc2_temp_voltage;
                             i32_adc2_idx_counter++;
 
                             if(i32_adc2_idx_counter > (DATA_BLOCK_SIZE -1)) 
@@ -189,7 +192,7 @@ void adc_task()
                                 i32_adc2_idx_counter = 0;
                                 if(xSemaphoreTake(gs_adc2_shared_mem_sem, portMAX_DELAY) == pdTRUE)
                                 {
-                                    memcpy(gs_pf32_adc2_shared, gs_af32_adc2_temp_buf, sizeof(gs_af32_adc2_temp_buf));
+                                    memcpy(gs_pf32_adc2_shared, gs_pf32_adc2_temp_buf, DATA_BLOCK_SIZE * sizeof(float));
                                     xSemaphoreGive(gs_adc2_shared_mem_sem);
                                     xTaskNotifyGive(gs_dsp_right_task_handle);
                                 }
@@ -282,6 +285,16 @@ void adc_init(float * pu16_adc1_shared, float * pu16_adc2_shared, SemaphoreHandl
 
     gs_adc1_shared_mem_sem = adc1_shared_mem_sem;
     gs_adc2_shared_mem_sem = adc2_shared_mem_sem;
+
+    // Allocate arrays in PSRAM:
+    gs_pf32_adc1_temp_buf = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM); 
+    gs_pf32_adc2_temp_buf = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM); 
+    if((gs_pf32_adc1_temp_buf == NULL) || (gs_pf32_adc2_temp_buf == NULL))
+    {
+        ESP_LOGE(ADC_TAG, "ERROR: while allocating ADC temp buf array in PSRAM");
+    }
+    memset(gs_pf32_adc1_temp_buf, 0 ,DATA_BLOCK_SIZE * sizeof(float)); 
+    memset(gs_pf32_adc2_temp_buf, 0 ,DATA_BLOCK_SIZE * sizeof(float));
 }
 
 
