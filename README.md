@@ -16,12 +16,23 @@ ASD
 (An alternative to step 1 and 2 is to pass --recurse-submodules to the git clone command. This will automatically initialize and update each submodule in the repository)
 
 ## Required Hardware
-This project is created for the ESP32-S3
-(ESP32-S3-DEVKITC-1-N8R8 was used in the development)
+This project is created for the ESP32-S3 \
+(ESP32-S3-DEVKITC-1-N8R8 was used in the development) \
+(The used ESP-S3 module has to have PSRAM. This project is configured to use Octal SPI PSRAM)
 
 ## List of menuconfig changes:
-CPU frequency:      240MHz (default is 160MHz) \
-Maximum FFT length: 2048   (default is 4096) 
+CPU frequency:      240MHz (default: 160MHz) \
+Maximum FFT length: 4096   (default: 4096) \
+Bootloader log verbosity: No output (default: info) \
+Support for external, SPI-connected RAM: Enable (default: Disabled) (Ops: requires ESP32 module with PSRAM) \
+Mode (QUAD/OCT) of SPI RAM chip in use: Octal Mode PSRAM (Default: Quad mode PSRAM) (Ops: requires ESP32 module with support for Octal mode SPI PSRAM) \
+Set RAM clock speed: 80MHz clock speed (default: 40MHz clock speed) \
+SPI RAM access method: "Make RAM allocatable using heap_caps_malloc(..., MALLOC_CAP_SPIRAM)" (default: "Make RAM allocatable using malloc() as well") \
+
+## Used GPIO's
+IO30: PSRAM CLK IO number (The default. Can be changed in menuconfig if needed) \
+IO26: PSRAM CS IO number (The default. Can be changed in menuconfig if needed) \
+!LIST NOT COMPLETE!
 
 ## ESP-IDF Version
 This project is created on ESP-IDF 5.0
