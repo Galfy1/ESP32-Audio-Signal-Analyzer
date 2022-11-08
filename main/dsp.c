@@ -97,25 +97,25 @@ void find_cent_freq(float * array, int32_t array_size, int32_t * p_cent_freq_idx
 
 
 // FOR FFT DEBUGGING TEST:
-__attribute__((aligned(16)))
-float x1[DATA_BLOCK_SIZE];
-static void debugging_fft_test()
-{
-    dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 875.0, 0.7, 0);  // De hentyder i doc til at 1 er fny... MEN det argere mere somom at 1 er fs ogs 0.5 er fny...
-    // for(int i = 0 ; i < 300 ; i++)
-    // {   
-    //     ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);
-    // }
-    // KØR INIT OG FFT HER
-    //fft_wrapper_init_fast(hann);
-    fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_mV, gs_hw_gain_stage_L, gs_wind_corr_factor);
-    for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
-    {   
-        ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);
-    }
-    // First half of x1 is aplitude values. Second half is junk.
-    dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
-}
+// __attribute__((aligned(16)))
+// float x1[DATA_BLOCK_SIZE];
+// static void debugging_fft_test()
+// {
+//     dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 875.0, 0.7, 0);  // De hentyder i doc til at 1 er fny... MEN det argere mere somom at 1 er fs ogs 0.5 er fny...
+//     // for(int i = 0 ; i < 300 ; i++)
+//     // {   
+//     //     ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);
+//     // }
+//     // KØR INIT OG FFT HER
+//     //fft_wrapper_init_fast(hann);
+//     fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_mV, gs_hw_gain_stage_L, gs_wind_corr_factor);
+//     for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
+//     {   
+//         ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);
+//     }
+//     // First half of x1 is aplitude values. Second half is junk.
+//     dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
+// }
 
 
 void dsp_left_ch_task()
@@ -131,7 +131,7 @@ void dsp_left_ch_task()
     static int32_t i32_avg_counter = 0;  
 
     // ---FFT TEST BEGIN---
-    debugging_fft_test();
+    //debugging_fft_test();
     // ---FFT TEST END---
 
     uint32_t ret;
