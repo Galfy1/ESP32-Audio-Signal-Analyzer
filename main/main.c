@@ -49,6 +49,7 @@ void app_main(void)
     SemaphoreHandle_t fft_R_res_shr_mem_sem;
 
     QueueHandle_t xQueue_pr_cmd;
+    QueueHandle_t xQueue_event;
 
     TaskHandle_t dsp_left_task_handle;
     TaskHandle_t dsp_right_task_handle;
@@ -67,8 +68,9 @@ void app_main(void)
     }
     
     // Create queues:
-    xQueue_pr_cmd = xQueueCreate(10, sizeof(sIntern_command_t));
-    if ((xQueue_pr_cmd == NULL))
+    xQueue_pr_cmd = xQueueCreate(10, sizeof(sIntern_command_setup_t));
+    xQueue_event = xQueueCreate(10, sizeof(sIntern_event_setup_t));
+    if ((xQueue_pr_cmd == NULL) || (xQueue_event == NULL))
     {
         ESP_LOGE(TAG, "ERROR: while creating one or more queues");
     }
@@ -79,6 +81,7 @@ void app_main(void)
         gs_af32_adc2_shared, 
         adc1_shared_mem_sem, 
         adc2_shared_mem_sem); 
+
     dsp_init(
         gs_af32_adc1_shared, 
         gs_af32_adc2_shared, 
@@ -88,6 +91,10 @@ void app_main(void)
         gs_af32_R_fft_res_shr,
         fft_L_res_shr_mem_sem,
         fft_R_res_shr_mem_sem);
+
+    patient_resp_init(
+        xQueue_pr_cmd);
+
     //ecep_uart_init();
 
     // Create tasks:
@@ -99,6 +106,7 @@ void app_main(void)
     //                                                                             This is done so the adc task can use direct task notification to syncronize use of the shared memory
     //                                                                          */ 
     // xTaskCreatePinnedToCore(adc_task, "adc_task", 4096, NULL, 8, NULL, 1); // Use core 1 
+    xTaskCreatePinnedToCore(dummy_task, "dummy_task", 4096, NULL, 4, NULL, 1); // Use core 1. 
     xTaskCreatePinnedToCore(patient_resp_task, "patient_resp_task", 4096, NULL, 4, NULL, 1); // Use core 1.                                                           
     //xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
     //xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 4096, NULL, 4, NULL, 1);

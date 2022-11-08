@@ -12,28 +12,43 @@
                                                                           // Og hvis R/L FFT result har en param struct, skal dens størrelse også lige tilføjes
 #define ECEP_PACKET_TYPE 42
 
-// Command ID  
-#define FETCH_FFT                   1
-#define SET_FFT_OUTPUT_FORMAT       2
-#define SET_FFT_WINDOW_TYPE         3
-#define SET_FFT_RES_AVG_COUNT       4
-#define FETCH_FFT_SETTING           5
-#define FETCH_FFT_TOTAL_DURATION    6
-#define FETCH_ADC_RAW_DATA          7
-#define FETCH_CENFREQ_HZ            8
-#define FETCH_CENFREQ_AMP           9
-#define SET_MIC_RANGE               10
-#define TRIG_PR_CLICK               11
-#define TRIG_PR_HOLD                12
-#define TRIG_PR_RELEASE             13
-#define TRIG_PR_PRESS               14
-#define SET_PR_DEFAULT_STATE        15
-#define PING                        16
+// Command IDs  
+#define ECEP_CMD_FETCH_FFT                  1
+#define ECEP_CMD_SET_FFT_OUTP_FORM          2
+#define ECEP_CMD_SET_FFT_WIND_TYPE          3
+#define ECEP_CMD_SET_FFT_RES_AVG_CT         4
+#define ECEP_CMD_SET_WIND_CORR_FACTOR       5
+#define ECEP_CMD_FETCH_FFT_STGS             6
+#define ECEP_CMD_FETCH_FFT_TOTAL_DUR        7
+#define ECEP_CMD_FETCH_ADC_RAW_DATA         8
+#define ECEP_CMD_FETCH_CEN_FREQ             9
+#define ECEP_CMD_FETCH_CEN_FREQ_AMP         10
+#define ECEP_CMD_SET_MIC_RANGE              11
+#define ECEP_CMD_FETCH_MIC_RANGE            12
+#define ECEP_CMD_TRIG_PR_CLICK              13
+#define ECEP_CMD_TRIG_PR_HOLD               14
+#define ECEP_CMD_TRIG_PR_RELEASE            15
+#define ECEP_CMD_TRIG_PR_PRESS              16
+#define ECEP_CMD_SET_PR_DEF_STATE           17
+#define ECEP_CMD_FETCH_PR_DEF_STATE         18
+#define PING                                19
+
+// Event IDs
+#define ECEP_EVNT_COMMAND_STATUS            1
+#define ECEP_EVNT_LEFT_FFT_RES              2
+#define ECEP_EVNT_RIGHT_FFT_RES             3
+#define ECEP_EVNT_FFT_STGS                  4
+#define ECEP_EVNT_FFT_TOT_DUR               5
+#define ECEP_EVNT_LEFT_ADC_RAW              6
+#define ECEP_EVNT_RIGHT_ADC_RAW             7
+#define ECEP_EVNT_CEN_FREQ                  8
+#define ECEP_EVNT_CEN_FREQ_AMP              9
+#define ECEP_EVNT_PR_DEF_STATE              10
+#define PONG                                11
 
 
 
-
-// parameter enums
+// parameter enums (for both commands and events)
 typedef enum{
     right = 1,
     left = 2,
@@ -56,6 +71,12 @@ typedef enum{
 } eFFT_window_type_t;
 
 typedef enum{
+    none = 1,
+    amplitude = 2,
+    energy = 3,
+} eFFT_corr_factor_t;
+
+typedef enum{
     dBSPL_90 = 1,
     dBSPL_120 = 2,
 } eMIC_range_dBSPL_t;
@@ -65,36 +86,68 @@ typedef enum{
     norm_closed = 2,
 } eRelay_state_t;
 
+typedef enum{
+    ASA_SUCCESS = 1,
+    ASA_failed = 2,
+    ASA_errorcode1 = 3,
+    ASA_errorcode2 = 4,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!
+} eCMD_status_t;
 
-// Parameter structs
+
+// Parameter structs (for both commands and events)
+
 typedef struct{
-    eAudio_channel_t channel;
-    eMIC_range_dBSPL_t range;
-} sMIC_range_t;
+
+    eFFT_output_format_t fft_output_format;
+    eFFT_window_type_t fft_window;
+    uint32_t fft_res_avg_count;
+    eFFT_corr_factor_t fft_corr_factor;
+
+} sFFT_stgs_t;
 
 
+// Paramter union
+typedef union uCommand_parameters{
 
-// Paramter union (write which commands the parameters are used for to the left of the parameter)
-typedef union uni_parameters{
     eAudio_channel_t channel;                   
     eFFT_output_format_t fft_output_format;     
     eFFT_output_format_t fft_window;      
-    uint32_t fft_res_avg_count;                 
-    sMIC_range_t mic_range;         
+    uint32_t fft_res_avg_count;
+    eFFT_corr_factor_t fft_corr_factor;                 
+    eMIC_range_dBSPL_t range;       
     uint32_t time;                              
-    eRelay_state_t relay_default;               
-} uCMD_parameters_t;
+    eRelay_state_t relay_default;  
+                 
+} uCMD_params_t;
 
 
-// Command struct for internal task communication.
+typedef union uEvent_parameters{
+
+    sFFT_stgs_t FFT_stgs;
+    uint32_t time;
+    uint32_t cen_freq_hz;
+    uint32_t cen_freq_amp;
+    eMIC_range_dBSPL_t range;   
+    eRelay_state_t relay_default;  
+
+} uEVNT_params_t;
+
+
+// Command and event structs for internal task communication.
 typedef struct{
 
-    uint32_t cmd_id;
-    uCMD_parameters_t param;
+    uint8_t id;
+    uCMD_params_t param;
 
-} sIntern_command_t;
+} sIntern_command_setup_t;
 
+typedef struct{
 
+    uint8_t id;
+    eCMD_status_t status;
+    uEVNT_params_t param;
+
+} sIntern_event_setup_t;
 
 
 // typedef struct
