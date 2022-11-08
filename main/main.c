@@ -23,29 +23,14 @@ The entry point is a user defined void app_main(void) function.
 See: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/freertos.html for more info
 */
 
-// Uart GPIO19 and GPIO20 are reserved for JTAG debugging (tror jeg. slet hvis jeg ikke kan få det til at virke)
-
-// Shared Memory:
-// static float gs_af32_adc1_shared[DATA_BLOCK_SIZE] = {0};  // Shared memory ADC1 (Left mic ch.)
-// static float gs_af32_adc2_shared[DATA_BLOCK_SIZE] = {0};  // Shared memory ADC2 (Right mic ch.)
-
-// static float gs_af32_L_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of post proceesed FFT output from DSP task (Left mic ch.)  // SKAL MÅSKE HEDE DSP RES I STEDET??
-// static float gs_af32_R_fft_res_shr[DATA_BLOCK_SIZE/2] = {0}; // Shared memory of post proceesed FFT output from DSP task (Right mic ch.)
-
 /* Structure guidelines for this project:
     All Tasks should be created in main.c
     All Queues, Semaphores and Shared memory used by multiple files should be created in main.c
     All Queues, Semaphores and Shared memory used by only one file should be created just within that file
 */
 
-
 void app_main(void)
 {    
-    // SemaphoreHandle_t adc1_shared_mem_sem;   
-    // SemaphoreHandle_t adc2_shared_mem_sem;
-    // SemaphoreHandle_t fft_L_res_shr_mem_sem;
-    // SemaphoreHandle_t fft_R_res_shr_mem_sem;
-
     TaskHandle_t dsp_left_task_handle;
     TaskHandle_t dsp_right_task_handle;
 

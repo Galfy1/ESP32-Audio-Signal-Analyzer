@@ -14,7 +14,6 @@ static const char *TAG = "fft_wrapper";
 #define P0   0.000020  // dB SPL Reference in Pascal
 
 static float gs_max_adc_val_mv;
-//static eFFT_hw_gain_stage_t gs_current_gain_stage;  // Currently selected gain stage
 
 /* Procedure to get amplitude output in dB SPL:
     1: Find the ratio between ADC input mV vs. Pascal from microphone
@@ -33,18 +32,23 @@ static float gs_f32_p0_mv_90dB_stage;   // P0 value converted to mV for the "up 
 static float gs_f32_p0_mv_120dB_stage;  // P0 value converted to mV for the "up to 120dB SPL" gain stage
 
 // Window Correction Factors (used to correct for amplitude or energy distortion introduced by the window function):
-static float gs_f32_cf_hann_ampl;
-static float gs_f32_cf_hann_energy;
-static float gs_f32_cf_blackman_ampl;
-static float gs_f32_cf_blackman_energy;
-static float gs_f32_cf_blackman_harris_ampl;
-static float gs_f32_cf_blackman_harris_energy;
-static float gs_f32_cf_blackman_nuttall_ampl;
-static float gs_f32_cf_blackman_nuttall_energy;
-static float gs_f32_cf_nuttall_ampl;
-static float gs_f32_cf_nuttall_energy;
-static float gs_f32_cf_flat_top_ampl;
-static float gs_f32_cf_flat_top_energy;
+typedef struct {
+    float f32_no_correction;
+    float f32_hann_ampl;
+    float f32_hann_energy;
+    float f32_blackman_ampl;
+    float f32_blackman_energy;
+    float f32_blackman_harris_ampl;
+    float f32_blackman_harris_energy;
+    float f32_blackman_nuttall_ampl;
+    float f32_blackman_nuttall_energy;
+    float f32_nuttall_ampl;
+    float f32_nuttall_energy;
+    float f32_flat_top_ampl;
+    float f32_flat_top_energy;
+} s_correction_factors_t;
+
+static s_correction_factors_t gs_correction_factors;
 
 static int32_t i32_N = DATA_BLOCK_SIZE;    // gs_ FORAN??? måske kand andet end N, da det ikke er bin størrelsen
 static bool gs_init_called = false;
@@ -53,13 +57,14 @@ static bool gs_init_called = false;
 __attribute__((aligned(16))) 
 static float gs_af32_wind[DATA_BLOCK_SIZE]; 
 
+static eFFT_window_type_t gs_curr_selected_wind;
+
 // SKRIV KORT OM I RAPPORTEN HVORFOR VI BRUGER WINDOWS
 // DE nævner det her:
 // https://www.sjsu.edu/people/burford.furman/docs/me120/FFT_tutorial_NI.pdf 
 // MÅSKE FIND AFSNITTET I DSP BOGEN MED DET, OG SE HVAD DE HAR AT SIGE
 // TROR DET STÅR PÅ SIDE 112 I DEN NYE DSP BOG
 // BARE SKRIV SUPER KORT OM DET
-
 
 // Husk måske også lige at convert "x-aksen" fra bin nr til frekvens (skal måske ikke gøres her men et andet sted idk)
 // (se (4.26) på side 103 i ny dsp bog for denne formel)
@@ -74,7 +79,6 @@ static float mean_of_float_array(float * p_f32_array, int32_t i32_array_size_in_
     }
     return (f32_sum / (float)i32_array_size_in_elements); 
 }
-
 static float rms_of_float_array(float * p_f32_array, int32_t i32_array_size_in_elements)
 {
     float f32_square = 0.0, f32_mean = 0.0, f32_root = 0.0;
@@ -93,11 +97,8 @@ static float rms_of_float_array(float * p_f32_array, int32_t i32_array_size_in_e
 
     return f32_root;
 }
-
 static esp_err_t calc_wind_correction_factors()
 {
-    //float af32_temp_wind_array[DATA_BLOCK_SIZE]; // Der er ikke plads til det array her!!!
-
     float * pf32_temp_wind_array = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM); // (Located in PSRAM) 
                                                                                                          // Array does not need to be 16bit aligned since speed is not of essence here
     if(pf32_temp_wind_array == NULL)
@@ -105,87 +106,113 @@ static esp_err_t calc_wind_correction_factors()
         ESP_LOGE(TAG, "ERROR: in calc_wind_correction_factors() while allocating pf32_temp_wind_array memory in PSRAM");
     }
     memset(pf32_temp_wind_array, 0 , DATA_BLOCK_SIZE * sizeof(float));    
-    // HUSK MÅSKE AT FREE() EFTER
 
+    // No correction:
+    gs_correction_factors.f32_no_correction = 1.0;
+    
     // Hanning:
     dsps_wind_hann_f32(pf32_temp_wind_array, i32_N);
-    gs_f32_cf_hann_ampl = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
-    gs_f32_cf_hann_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_hann_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_hann_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
 
     // Blackman:
+    dsps_wind_blackman_f32(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_blackman_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_blackman_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
 
+    // Blackman_harris:
+    dsps_wind_blackman_harris_f32(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_blackman_harris_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_blackman_harris_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
 
-    ESP_LOGE(TAG, "MUMS HANNING CORRECTION FACTOR ENERGY: %f" , gs_f32_cf_hann_energy);
+    // Blackman_nuttall:
+    dsps_wind_blackman_nuttall_f32(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_blackman_nuttall_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_blackman_nuttall_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+
+    // Nuttall:
+    dsps_wind_nuttall_f32(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_nuttall_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_nuttall_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+
+    // Flat_top:
+    dsps_wind_flat_top_f32(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_flat_top_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_flat_top_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N); 
+
+    free(pf32_temp_wind_array); // release the memory for the wind array that is no longer needed.
 
     return ESP_OK;
 }
 
-
-/**
- * @brief Convert complex fft result to real amplitude values. 
- *        (See page 103 in "Digital Signal Processing: Fundamentals and Applications 3ed." for the math)
- *        SKRIV AT OUTPUT ER mV fra 0 - 1750 HVIS OUPUTTET IKKE ER DB. OG DB SPL HVIS DET ER 
- * 
- * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
- * @param[in] i32_bin_size amount of complex values in fft result array
- * @param[in] b_result_in_db_spl true = return amplitude result in dB SPL, false = return amplitude result in mV 
- * @param[in] eFFT_hw_gain_stage the currently used hardware gain stage (this param is only used if b_result_in_db_spl is set true)
- * @return esp_err_t 
- */
-static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db_spl, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+static float get_selected_corr_factor(eFFT_window_corr_factor_t eFFT_window_corr_factor)
 {
-    float f32_p0_mv;
-
-    if(b_result_in_db_spl == true)
+    switch(eFFT_window_corr_factor)
     {
-        switch(eFFT_hw_gain_stage)
-        {
-            case up_to_90dB_SPL:
-                f32_p0_mv = gs_f32_p0_mv_90dB_stage;
-                break;
-            case up_to_120dB_SPL:
-                f32_p0_mv = gs_f32_p0_mv_120dB_stage;
-                break;
-            default:
-                ESP_LOGE(TAG, "ERROR: in conv_fft_res_to_ampl() - Invalid param: eFFT_hw_gain_stage"); 
-                return ESP_ERR_INVALID_ARG;
-                break;
-        }
-
-        for(int i = 0; i < i32_bin_size; i++) // return amplitude result in dB SPL
-        {
-            pf32_data[i] = 20 * log10f((sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / i32_bin_size) / f32_p0_mv);    // Ampli = sqrt(Real[X(k)]^2 + Imag[X(k)]^2) / N                                                                                                                                           
-        }                                                                                                                                                             // log10(0) is not a valid statement! (therefore add 0.0000001 to make sure the argument is never 0))
+        case none:
+            return gs_correction_factors.f32_no_correction;
+            break;
+        case amplitude:
+            switch(gs_curr_selected_wind)
+            {
+                case hann:
+                    return gs_correction_factors.f32_hann_ampl;
+                    break;
+                case blackman:
+                    return gs_correction_factors.f32_blackman_ampl;
+                    break;
+                case blackman_harris:
+                    return gs_correction_factors.f32_blackman_harris_ampl;
+                    break;
+                case blackman_nuttall:
+                    return gs_correction_factors.f32_blackman_nuttall_ampl;
+                    break;
+                case nuttall:
+                    return gs_correction_factors.f32_nuttall_ampl;
+                    break;
+                case flat_top:
+                    return gs_correction_factors.f32_flat_top_ampl;
+                    break;
+                default:
+                    ESP_LOGE(TAG, "ERROR: Currently selected window is invalid");
+                    return ESP_FAIL;
+                    break;
+            }
+            break;
+        case energy:
+            switch(gs_curr_selected_wind)
+            {
+                case hann:
+                    return gs_correction_factors.f32_hann_energy;
+                    break;
+                case blackman:
+                    return gs_correction_factors.f32_blackman_energy;
+                    break;
+                case blackman_harris:
+                    return gs_correction_factors.f32_blackman_harris_energy;
+                    break;
+                case blackman_nuttall:
+                    return gs_correction_factors.f32_blackman_nuttall_energy;
+                    break;
+                case nuttall:
+                    return gs_correction_factors.f32_nuttall_energy;
+                    break;
+                case flat_top:
+                    return gs_correction_factors.f32_flat_top_energy;
+                    break;
+                default:
+                    ESP_LOGE(TAG, "ERROR: Currently selected window is invalid");
+                    return ESP_FAIL;
+                    break;
+            }
+            break;
+        default:
+            ESP_LOGE(TAG, "ERROR: Invalid argument (eFFT_window_corr_factor) in get_selected_corr_factor()");
+            return ESP_ERR_INVALID_ARG;
+            break;
     }
-    else
-    {
-        for(int i = 0; i < i32_bin_size; i++) // return amplitude result in mV 
-        {
-            pf32_data[i] = sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / i32_bin_size;    // Ak = 1/N * sqrt(Real[X(k)]^2 + Imag[X(k)]^2)
-        }
-    }
-
-    return ESP_OK;
-}
-
-/**
- * @brief Convert complex fft result to real power values
- *        (See page 103 in "Digital Signal Processing: Fundamentals and Applications 3ed." for the math)
- * 
- * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
- * @param[in] i32_bin_size amount of complex values in fft result array
- * @return esp_err_t 
- */
-static esp_err_t conv_fft_res_to_pow(float * pf32_data, int32_t i32_bin_size)
-{
-    // VED IKKE HVORFOR HAN DELER MED 2N I HANS OG IKKE N^2 SOM DER STÅR I BOGEN 
-    for(int i = 0; i < i32_bin_size; i++)
-    {
-        pf32_data[i] = (pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / (i32_bin_size*i32_bin_size);    // Ak = 1/(N^2) * (Real[X(k)]^2 + Imag[X(k)]^2)
-    }
-
-    return ESP_OK;
-}
+    return ESP_FAIL;
+} 
 
 esp_err_t conv_ampl_mv_to_ampl_db_spl(float * pf32_data, int32_t i32_bin_size, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
 {
@@ -219,6 +246,66 @@ esp_err_t conv_ampl_mv_to_ampl_db_spl(float * pf32_data, int32_t i32_bin_size, e
     return ESP_OK;
 }
 
+/**
+ * @brief Convert complex fft result to real amplitude values. 
+ *        (See page 103 in "Digital Signal Processing: Fundamentals and Applications 3ed." for the math)
+ *        SKRIV AT OUTPUT ER mV fra 0 - 1750 HVIS OUPUTTET IKKE ER DB. OG DB SPL HVIS DET ER 
+ * 
+ * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
+ * @param[in] i32_bin_size amount of complex values in fft result array
+ * @param[in] b_result_in_db_spl true = return amplitude result in dB SPL, false = return amplitude result in mV 
+ * @param[in] eFFT_hw_gain_stage the currently used hardware gain stage (this param is only used if b_result_in_db_spl is set true)
+ * @param[in] eFFT_window_corr_factor The window correction factor type
+ * @return esp_err_t 
+ */
+static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db_spl, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_window_corr_factor_t eFFT_window_corr_factor)
+{
+    // Obtain the selected window-correction-factor for the window in use:
+    float f32_selected_wind_corr_factor = get_selected_corr_factor(eFFT_window_corr_factor);
+
+    // Calculate amplitude:
+    for(int32_t i = 0; i < i32_bin_size; i++)
+    {
+        pf32_data[i] = f32_selected_wind_corr_factor * (sqrtf(pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] +  pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / i32_bin_size); 
+        // Ampli = sqrt(Real[X(k)]^2 + Imag[X(k)]^2) / N
+        // log10(0) is not a valid statement! (therefore add 0.0000001 to make sure the argument is never 0))
+    }
+
+    // Convert to dB SPL if specified:
+    if(b_result_in_db_spl == true)
+    {
+        conv_ampl_mv_to_ampl_db_spl(pf32_data, i32_bin_size, eFFT_hw_gain_stage);
+    }
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Convert complex fft result to real power values
+ *        (See page 103 in "Digital Signal Processing: Fundamentals and Applications 3ed." for the math)
+ * 
+ * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
+ * @param[in] i32_bin_size amount of complex values in fft result array
+ * @param[in] eFFT_window_corr_factor The window correction factor type
+ * @return esp_err_t 
+ */
+static esp_err_t conv_fft_res_to_pow(float * pf32_data, int32_t i32_bin_size, eFFT_window_corr_factor_t eFFT_window_corr_factor)
+{
+    // Obtain the selected window-correction-factor for the window in use:
+    float f32_selected_wind_corr_factor = get_selected_corr_factor(eFFT_window_corr_factor);  
+
+    for(int32_t i = 0; i < i32_bin_size; i++)
+    {
+        pf32_data[i] = pow(f32_selected_wind_corr_factor, 2.0) * ((pf32_data[i* 2 + 0] * pf32_data[i* 2 + 0] + pf32_data[i* 2 + 1] * pf32_data[i* 2 + 1] + 0.0000001) / (i32_bin_size*i32_bin_size));    
+        // Pow = 1/(N^2) * (Real[X(k)]^2 + Imag[X(k)]^2)
+        // (f32_selected_wind_corr_factor is to the power of 2 because we are dealing with power. Remeber Pow = ampl^2)
+    }
+
+    return ESP_OK;
+}
+
+
+
 static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
 {
     switch (eFFT_window_type)
@@ -227,38 +314,31 @@ static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
             // Generate hann window:
             dsps_wind_hann_f32(gs_af32_wind, i32_N); 
             break;
-        
         case blackman:
             // Generate Blackman window
             dsps_wind_blackman_f32(gs_af32_wind, i32_N);
             break;
-
         case blackman_harris:
             // Generate Blackman-Harris window
             dsps_wind_blackman_harris_f32(gs_af32_wind, i32_N);
             break;
-
         case blackman_nuttall:
             // Generate Blackman-Nuttall window
             dsps_wind_blackman_nuttall_f32(gs_af32_wind, i32_N);
             break;
-
         case nuttall:
             // Generate Nuttall window
             dsps_wind_nuttall_f32(gs_af32_wind, i32_N);
-            break;
-        
+            break; 
         case flat_top:
             // Generate Flat-Top window
             dsps_wind_flat_top_f32(gs_af32_wind, i32_N);
             break;
-
         default:
             ESP_LOGE(TAG, "ERROR: in generate_window() - Invalid param: eFFT_window_type"); 
             return ESP_ERR_INVALID_ARG;
             break;
     }
-
     return ESP_OK;
 }
 
@@ -272,11 +352,15 @@ esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
     }
 
     generate_window(eFFT_window_type);
+    gs_curr_selected_wind = eFFT_window_type;
+
     return ESP_OK;
 }
 
 
-esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+
+
+esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_window_corr_factor_t eFFT_window_corr_factor)
 {
     esp_err_t ret;
 
@@ -300,7 +384,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
             ret = dsps_fft4r_fc32(pf32_data, i32_N>>1); // Half size FFT
             if(ret != ESP_OK)
             {
-                ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);;
+                ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);
                 return ret;
             }
 
@@ -308,7 +392,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
             ret = dsps_bit_rev4r_fc32(pf32_data, i32_N>>1);
             if(ret != ESP_OK)
             {
-                ESP_LOGE(TAG, "ERROR: Radix4 Bit Reversal failed Error = %i", ret);;
+                ESP_LOGE(TAG, "ERROR: Radix4 Bit Reversal failed Error = %i", ret);
                 return ret;
             }
 
@@ -320,7 +404,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
             ret = dsps_fft2r_fc32(pf32_data, i32_N >> 1); // Half size FFT
             if(ret != ESP_OK)
             {
-                ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);;
+                ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);
                 return ret;
             }
 
@@ -328,14 +412,15 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
             ret = dsps_bit_rev2r_fc32(pf32_data, i32_N >> 1);
             if(ret != ESP_OK)
             {
-                ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);;
+                ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);
                 return ret;
             }
 
             break;
 
         default:
-            ESP_LOGE(TAG, "ERROR: Invalid paramater (radix type)");
+            ESP_LOGE(TAG, "ERROR: Invalid argument (eFFT_radix_type) in fft_wrapper_run_fft_tech3()");
+            return ESP_ERR_INVALID_ARG;
             break;
     }
 
@@ -347,28 +432,25 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
                                                                     */
     if(ret != ESP_OK)                                               
     {                                                               
-        ESP_LOGE(TAG, "ERROR: Splitting Operation failed = %i", ret);;
+        ESP_LOGE(TAG, "ERROR: Splitting Operation failed = %i", ret);
         return ret;
     }
 
     // Extract amplitude or power:
     switch(eFFT_output_form)
     {
-
         case ampltitude_mV:
-            conv_fft_res_to_ampl(pf32_data, i32_N>>1, false, 0);
+            conv_fft_res_to_ampl(pf32_data, i32_N>>1, false, 0, eFFT_window_corr_factor);
             break;
-
         case ampltitude_dB_SPL:
-            conv_fft_res_to_ampl(pf32_data, i32_N>>1, true, eFFT_hw_gain_stage);
+            conv_fft_res_to_ampl(pf32_data, i32_N>>1, true, eFFT_hw_gain_stage, eFFT_window_corr_factor);
             break;
-
         case power_mV:
-            conv_fft_res_to_pow(pf32_data, i32_N>>1);
+            conv_fft_res_to_pow(pf32_data, i32_N>>1, eFFT_window_corr_factor);
             break;
-
         default:
-            ESP_LOGE(TAG, "ERROR: Invalid paramater (output format type)");
+            ESP_LOGE(TAG, "ERROR: Invalid argument (eFFT_output_form) in fft_wrapper_run_fft_tech3()");
+            return ESP_ERR_INVALID_ARG;
             break;
     }
     
@@ -395,6 +477,7 @@ esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type)
     }
 
     generate_window(eFFT_window_type);
+    gs_curr_selected_wind = eFFT_window_type;
 
     switch(ADC_ATTEN_DB)
     {
@@ -411,8 +494,8 @@ esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type)
             gs_max_adc_val_mv = 3100.0;
             break;
         default:
-            ESP_LOGE(TAG, "ERROR: invalid ADC_ATTEN_DB");
-            return ESP_FAIL;
+            ESP_LOGE(TAG, "ERROR: Invalid argument (ADC_ATTEN_DB) in fft_wrapper_init_tech3()");
+            return ESP_ERR_INVALID_ARG;
             break;
     }
 

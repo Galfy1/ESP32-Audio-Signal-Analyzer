@@ -27,6 +27,11 @@ typedef enum {
     up_to_120dB_SPL,
 } eFFT_hw_gain_stage_t;
 
+typedef enum{
+    none,
+    amplitude,
+    energy,
+} eFFT_window_corr_factor_t;
 
 
 /**
@@ -49,11 +54,11 @@ esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type);
  * @param[in] eFFT_radix_type: Desired FFT radix
  * @param[in] eFFT_output_form: Desired output format
  * @param eFFT_hw_gain_stage The used hardware gain stage (this param is only used if amplitude_dB_SPL is chosen as output form)
+ * @param[in] eFFT_window_corr_factor The window correction factor type
  * 
  * @return esp_err_t:  returns ESP_OK if sucessfull, else returns error. 
  */
-esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage);
-
+esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_window_corr_factor_t eFFT_window_corr_factor);
 
 
 /**
