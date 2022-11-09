@@ -21,16 +21,14 @@ static const char *DSP_TAG = "DSP.C";
 #define DFLT_FFT_OUTPUT_FORMAT  ampltitude_dB_SPL  // eFFT_output_form_t     Default output format
 #define DFLT_WIND_USED          hann               // eFFT_window_type_t     Default window type 
 #define DFLT_FFT_AVG_MAX_COUNT  5                  // Default amount of FFT result blocks to average before passing it on. 
-#define DFLT_HW_GAIN_STAGE_L    up_to_90dB_SPL     // eFFT_hw_gain_stage_t   Default Hardware Gain stage for Left channel
-#define DFLT_HW_GAIN_STAGE_R    up_to_90dB_SPL     // eFFT_hw_gain_stage_t   Default Hardware Gain stage for Right channel
+#define DFLT_HW_GAIN_STAGE      up_to_90dB_SPL     // eFFT_hw_gain_stage_t   Default Hardware Gain stage
 #define DFLT_WIND_CORR_FACTOR   amplitude          // eFFT_window_correction_factor_t Default window correction factor type
                            
 // Declare settings variables with default values:
 eFFT_output_form_t   gs_fft_out_format       = DFLT_FFT_OUTPUT_FORMAT;
 eFFT_window_type_t   gs_window_used          = DFLT_WIND_USED;
 int32_t              gs_i32_fft_avg_max_cnt  = DFLT_FFT_AVG_MAX_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
-eFFT_hw_gain_stage_t gs_hw_gain_stage_L      = DFLT_HW_GAIN_STAGE_L;
-eFFT_hw_gain_stage_t gs_hw_gain_stage_R      = DFLT_HW_GAIN_STAGE_R;
+eFFT_hw_gain_stage_t gs_hw_gain_stage      = DFLT_HW_GAIN_STAGE;
 eFFT_window_corr_factor_t gs_wind_corr_factor = DFLT_WIND_CORR_FACTOR;
 
 float gs_f32_total_fft_dur_ms;  // The total duration of the averaged FFT result in ms
@@ -108,7 +106,7 @@ void find_cent_freq(float * array, int32_t array_size, int32_t * p_cent_freq_idx
 //     // }
 //     // KØR INIT OG FFT HER
 //     //fft_wrapper_init_fast(hann);
-//     fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_mV, gs_hw_gain_stage_L, gs_wind_corr_factor);
+//     fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_mV, gs_hw_gain_stage, gs_wind_corr_factor);
 //     for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
 //     {   
 //         ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);
@@ -170,7 +168,7 @@ void dsp_left_ch_task()
             }
             else
             {
-                fft_wrapper_run_fft_tech3(gs_af32_adc1_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage_L, gs_wind_corr_factor);
+                fft_wrapper_run_fft_tech3(gs_af32_adc1_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage, gs_wind_corr_factor);
             }
             //Remove DC-offset (DC-offset was added by our hardware. aka not a part of the original signal)
             gs_af32_adc1_temp_buf[0] = 0;
@@ -219,7 +217,7 @@ void dsp_left_ch_task()
                 // Convert averaged result to dB SPL if necessaery (remember that we originally requested the fft res in mV. This was so we could average them easily): 
                 if(gs_fft_out_format == ampltitude_dB_SPL) 
                 {
-                    conv_ampl_mv_to_ampl_db_spl(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE/2, gs_hw_gain_stage_L);
+                    conv_ampl_mv_to_ampl_db_spl(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE/2, gs_hw_gain_stage);
                 }
 
                 // Find center frequency:
@@ -262,7 +260,7 @@ void dsp_right_ch_task()
             memset(gs_pf32_adc2_shared, 0, sizeof(gs_af32_adc2_temp_buf));  // Reset the shared memory
             xSemaphoreGive(gs_adc2_shared_mem_sem);
 
-            fft_wrapper_run_fft_tech3(gs_af32_adc2_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage_R, gs_wind_corr_factor); // Run FFT
+            fft_wrapper_run_fft_tech3(gs_af32_adc2_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage, gs_wind_corr_factor); // Run FFT
             if(xSemaphoreTake(gs_fft_R_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
             {
                 memcpy(gs_pf32_R_fft_res_shr, gs_af32_adc2_temp_buf, sizeof(gs_af32_adc2_temp_buf)/2); // Copy FFT result from local copy to shared memory
