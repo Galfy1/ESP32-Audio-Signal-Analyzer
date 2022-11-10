@@ -11,7 +11,9 @@
 #define ECEP_MAX_EVNT_PACKET_LEN  ECEP_HEADER_LEN + (4*DATA_BLOCK_SIZE)   // Max packet length for an event packet in bytes.
                                                                            /* (chosen by biggest Event. In this case: Left/Right ADC Raw data event)
                                                                              (*4 because bulk raw adc data is stored as floats. The L/R ADC Raw data event has no param struct size to account for)  */
-#define ECEP_PACKET_TYPE 42
+#define ECEP_PACKET_TYPE 0x42
+
+// ALLE DE ID HER SKAL VÆRE HEX IKKE DECIMAL:
 
 // Command IDs  
 #define ECEP_CMD_FETCH_FFT                  1

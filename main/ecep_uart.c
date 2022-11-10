@@ -25,7 +25,7 @@ static const char *TAG = "ecep_uart.c";
 #define ECEP_RTS_PIN  UART_PIN_NO_CHANGE // Not used if HW flowcontrol is disabled
 #define ECEP_CTS_PIN  UART_PIN_NO_CHANGE // Not used if HW flowcontrol is disabled
 
-#define BUF_SIZE 1024
+#define BUF_SIZE 1024  // Ved ikke om det bliver et problem hvis den her er under størrelsen på en command pakke? Måske ikke Finder vi måske aldrig ud af, da vi ikke har en command pakke over 1024 i størrelse anyway.
 #define UART_RD_BUF_SIZE  BUF_SIZE
 
 static QueueHandle_t ecep_uart_queue;     // Queue for uart api
@@ -33,6 +33,33 @@ static QueueHandle_t ecep_data_len_que;   // Queue used to syncronize ecep_packe
 
 static uint8_t gs_au8_raw_uart_shr[UART_RD_BUF_SIZE];  // Raw uart read data (shared memory)
 static SemaphoreHandle_t gs_raw_uart_shr_mem_sem;
+
+static void ecep_command_handler(uint8_t u8_command_code, uint8_t * u8_params_and_bulk, uint16_t u8_params_and_bulk_len)
+{
+
+    for(int32_t i = 0; i < u8_params_and_bulk_len ; i++)
+    {
+        ESP_LOGI(TAG, "%c", u8_params_and_bulk[i]);
+    }
+
+
+
+    switch(u8_command_code)
+    {
+        case ECEP_CMD_FETCH_FFT:
+            break;
+        
+        case 0x08:
+            ESP_LOGI(TAG, "Jamen Okay da");
+
+            break;
+
+        // MANGLER EN MASSE
+        default:
+            break;
+    }
+
+}
 
 void ecep_packet_handler_task()
 {
@@ -45,7 +72,7 @@ void ecep_packet_handler_task()
     uint32_t byte_counter;
 
     uint8_t  u8_packet_type;
-    uint8_t  u8_cmd_evt_code;
+    uint8_t  u8_command_code = 0xFF;
     uint16_t u16_packet_len = 0xFFFF;
     
     uint32_t remaining_package_len;
@@ -77,7 +104,9 @@ void ecep_packet_handler_task()
 
                 if((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter == u16_packet_len)) // Packet assembly complete
                 {
-                    // KALD CMD HANDLER
+                    ESP_LOGI(TAG, "Jamen Okay da ASDASD");
+
+                    ecep_command_handler(u8_command_code, u8_packet_data[4], u16_packet_len - ECEP_HEADER_LEN); // Pass packet without header
 
                     // Reset Package byte counter and data:
                     u32_package_byte_counter = 0;
@@ -95,12 +124,12 @@ void ecep_packet_handler_task()
                     if(u32_package_byte_counter == ECEP_HEADER_LEN) // Header has been fully read
                     {
                         u8_packet_type  = u8_packet_data[0];
-                        u8_cmd_evt_code = u8_packet_data[1];
+                        u8_command_code = u8_packet_data[1];
                         u16_packet_len  = u8_packet_data[2] | (u8_packet_data[3] << 8);
 
-                        ESP_LOGI(TAG, "Received Packet - u8_packet_type:  %08x", (unsigned int)u8_packet_type);
-                        ESP_LOGI(TAG, "Received Packet - u8_cmd_evt_code: %08x", (unsigned int)u8_cmd_evt_code);
-                        ESP_LOGI(TAG, "Received Packet - u16_packet_len:  %08x", (unsigned int)u16_packet_len);
+                        ESP_LOGI(TAG, "Received Packet - u8_packet_type:  0x%04x", (unsigned int)u8_packet_type);
+                        ESP_LOGI(TAG, "Received Packet - u8_command_code: 0x%04x", (unsigned int)u8_command_code);
+                        ESP_LOGI(TAG, "Received Packet - u16_packet_len:  0x%04x", (unsigned int)u16_packet_len);
 
                         // Header error checks:
                         if (u8_packet_type != ECEP_PACKET_TYPE)
@@ -124,10 +153,18 @@ void ecep_packet_handler_task()
                     remaining_data_len = u32_data_len - byte_counter;
                     chunk_size_to_cpy = (remaining_package_len < remaining_data_len ? remaining_package_len : remaining_data_len);  // chunk size to copy is limited by either u16_packet_len or u32_data_len
 
-                    memcpy(u8_packet_data[u32_package_byte_counter], au8_raw_uart_copy[byte_counter], chunk_size_to_cpy);
+                    ESP_LOGE(TAG, "remaining_package_len: %i", (int) remaining_package_len);
+                    ESP_LOGE(TAG, "remaining_data_len: %i", (int) remaining_data_len);
+                    ESP_LOGE(TAG, "chunk_size_to_cpy: %i", (int) chunk_size_to_cpy);
+                    ESP_LOGE(TAG, "u8_packet_data[u32_package_byte_counter]: %i", (int) u8_packet_data[u32_package_byte_counter]);
+                    ESP_LOGE(TAG, "u32_package_byte_counter: %i", (int) u32_package_byte_counter);
+
+                    memcpy(&u8_packet_data[u32_package_byte_counter], &au8_raw_uart_copy[byte_counter], chunk_size_to_cpy);
 
                     u32_package_byte_counter += chunk_size_to_cpy;
                     byte_counter += chunk_size_to_cpy;
+
+                    ESP_LOGE(TAG, "u32_package_byte_counter 2: %i", (int) u32_package_byte_counter);
                 }
 
             }
@@ -168,11 +205,11 @@ void ecep_packet_handler_task()
             //         {
             //             //Extract elements in header:
             //             u8_packet_type  = u8_packet_data[0];
-            //             u8_cmd_evt_code = u8_packet_data[1];
+            //             u8_command_code = u8_packet_data[1];
             //             u16_packet_len  = u8_packet_data[2] | (u8_packet_data[3] << 8);
 
             //             ESP_LOGI(TAG, "Received Packet - u8_packet_type:  %08x", (uint32_t)u8_packet_type);
-            //             ESP_LOGI(TAG, "Received Packet - u8_cmd_evt_code: %08x", (uint32_t)u8_cmd_evt_code);
+            //             ESP_LOGI(TAG, "Received Packet - u8_command_code: %08x", (uint32_t)u8_command_code);
             //             ESP_LOGI(TAG, "Received Packet - u16_packet_len:  %08x", (uint32_t)u16_packet_len);
 
             //             // Header error checks:
@@ -237,11 +274,11 @@ void ecep_packet_handler_task()
             //     {
             //         //Extract header:
             //         u8_packet_type  = u8_packet_data[0];
-            //         u8_cmd_evt_code = u8_packet_data[1];
+            //         u8_command_code = u8_packet_data[1];
             //         u16_packet_len  = u8_packet_data[2] | (u8_packet_data[3] << 8);
 
             //         ESP_LOGI(TAG, "Received Packet - u8_packet_type:  %08x", (uint32_t)u8_packet_type);
-            //         ESP_LOGI(TAG, "Received Packet - u8_cmd_evt_code: %08x", (uint32_t)u8_cmd_evt_code);
+            //         ESP_LOGI(TAG, "Received Packet - u8_command_code: %08x", (uint32_t)u8_command_code);
             //         ESP_LOGI(TAG, "Received Packet - u16_packet_len:  %08x", (uint32_t)u16_packet_len);
 
             //         // Header error checks:
