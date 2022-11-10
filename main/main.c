@@ -13,8 +13,8 @@
 #include "adc.h"
 #include "dsp.h"
 #include "ecep_uart.h"
-#include "patient_response.h"
 #include "ecep_defines.h"
+#include "patient_response.h"
 
 static const char *TAG = "main.c";
 
@@ -99,11 +99,12 @@ void app_main(void)
     patient_resp_init(
         xQueue_pr_cmd);
 
-    //ecep_uart_init();
+    ecep_uart_init();
 
     // Create tasks:
     // FIND LIGE UD AF MED DE PRIORITETER HER... ADCEN tasken skal nok have højeste priroritet! 
     // HAR SAT dsp_left_ch_task og dsp_right_ch_task TIL BEGGE AT KØRE OP CORE 1 TIL AT STARTE MED. MEN DEN ENE SKAL OVER PÅ CORE 2 PÅ ET TIDSPUNKT
+    // MÅSKE GØR STACK SIZEN MINDRE PÅ DE SMÅ TASKS DER IKKE BEHØVER SÅ MEGET STACK PLADS
 
     // Create tasks (order is important)
     xTaskCreatePinnedToCore(dsp_left_ch_task, "dsp_left_task", 4096, NULL, 4, &dsp_left_task_handle, 1); // Use core 1 
@@ -114,8 +115,8 @@ void app_main(void)
     xTaskCreatePinnedToCore(adc_task, "adc_task", 4096, NULL, 8, NULL, 1); // Use core 1 . ADC task needs the higher priority compared to other tasks
     xTaskCreatePinnedToCore(dummy_task, "dummy_task", 4096, NULL, 4, NULL, 1); // Use core 1. 
     xTaskCreatePinnedToCore(patient_resp_task, "patient_resp_task", 4096, NULL, 4, NULL, 1); // Use core 1.     
-    //xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
-    //xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 4096, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 4096, NULL, 4, NULL, 1);
 
 
     // Amount of PSRAM left:

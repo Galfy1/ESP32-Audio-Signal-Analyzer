@@ -1,15 +1,16 @@
-
-
 #ifndef ECEP_DEFINES_H_INCLUDED
 #define ECEP_DEFINES_H_INCLUDED
 
+#include "common_defines.h"
 
-#define ECEP_HEADER_SIZE        4  // In bytes
-#define ECEP_MAX_PACKAGE_SIZE   ECEP_HEADER_SIZE + (4*UART_RD_BUF_SIZE)   // Max package size in bytes.
-                                                                          // (chosen by biggest command or event. In this case: Left/Right FFT Result event)
+#define ECEP_HEADER_LEN       4                                       // Header length In bytes
 
-                                                                          // HOV er det smart at have en define fra common_defines her inde??   
-                                                                          // Og hvis R/L FFT result har en param struct, skal dens størrelse også lige tilføjes
+#define ECEP_MAX_CMD_PACKET_LEN 1000                                        // Max packet length for an event packet in bytes. 
+                                                                            /* (value is arbitrarily chosen. Is simply has to be at least the size of the largest command package.
+                                                                               No command package is currently over 1000 bytes in size.) */
+#define ECEP_MAX_EVNT_PACKET_LEN  ECEP_HEADER_LEN + (4*DATA_BLOCK_SIZE)   // Max packet length for an event packet in bytes.
+                                                                           /* (chosen by biggest Event. In this case: Left/Right ADC Raw data event)
+                                                                             (*4 because bulk raw adc data is stored as floats. The L/R ADC Raw data event has no param struct size to account for)  */
 #define ECEP_PACKET_TYPE 42
 
 // Command IDs  

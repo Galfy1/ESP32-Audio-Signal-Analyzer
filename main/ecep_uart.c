@@ -15,11 +15,18 @@
 
 static const char *TAG = "ecep_uart.c";
 
-#define ECEP_UART_NUM UART_NUM_0   // Uart 0: The uart routed to the uart<->usb chip on the ESP32-S3 dev-kit-c (aka the "uart" usb port)
-#define ECEP_UART_CFG_BAUD 115200 // Lave test til at se hvor hurtig vi kan slippe afsted med uden stor fejl
-#define ECEP_UART_CFG_FC   UART_HW_FLOWCTRL_DISABLE        // Flow control (usb<->uart chip on esp32-s3 devkit-c is not hooked up to CTS)
+// (Debug console is moved from UART0 to UART1 in menuconfig)
 
-#define UART_RD_BUF_SIZE  1024
+#define ECEP_UART_NUM UART_NUM_0   // Uart 0: The uart routed to the uart<->usb chip on the ESP32-S3 dev-kit-c (aka the "uart" usb port)
+#define ECEP_UART_CFG_BAUD 921600 // Lave test til at se hvor hurtig vi kan slippe afsted med uden stor fejl
+#define ECEP_UART_CFG_FC   UART_HW_FLOWCTRL_DISABLE        // Flow control (usb<->uart chip on esp32-s3 devkit-c is not hooked up to CTS)
+#define ECEP_TXD_PIN  43 // (GPIO --> UART0 TX. aka uart-usb-port on devkit-c) 
+#define ECEP_RXD_PIN  44 // (GPIO --> UART0 TX. aka uart-usb-port on devkit-c) 
+#define ECEP_RTS_PIN  UART_PIN_NO_CHANGE // Not used if HW flowcontrol is disabled
+#define ECEP_CTS_PIN  UART_PIN_NO_CHANGE // Not used if HW flowcontrol is disabled
+
+#define BUF_SIZE 1024
+#define UART_RD_BUF_SIZE  BUF_SIZE
 
 static QueueHandle_t ecep_uart_queue;     // Queue for uart api
 static QueueHandle_t ecep_data_len_que;   // Queue used to syncronize ecep_packet_handler_task() from ecep_uart_event_task()
@@ -27,20 +34,19 @@ static QueueHandle_t ecep_data_len_que;   // Queue used to syncronize ecep_packe
 static uint8_t gs_au8_raw_uart_shr[UART_RD_BUF_SIZE];  // Raw uart read data (shared memory)
 static SemaphoreHandle_t gs_raw_uart_shr_mem_sem;
 
-
 void ecep_packet_handler_task()
 {
     uint32_t u32_data_len = 0; 
     uint8_t au8_raw_uart_copy[UART_RD_BUF_SIZE];
 
-    uint8_t  u8_packet_data[ECEP_MAX_PACKAGE_SIZE];
+    uint8_t  u8_packet_data[ECEP_MAX_CMD_PACKET_LEN];    // DET HER GIGA ARRAY GØR MÅSKE AT TASKEN LØBER TØR FOR STACK PLADS... ELLERS MÅSKE PLACER I PSRAM
     uint32_t u32_package_byte_counter = 0; 
 
     uint32_t byte_counter;
 
     uint8_t  u8_packet_type;
     uint8_t  u8_cmd_evt_code;
-    uint16_t u16_packet_len;
+    uint16_t u16_packet_len = 0xFFFF;
     
     uint32_t remaining_package_len;
     uint32_t remaining_data_len;
@@ -50,6 +56,8 @@ void ecep_packet_handler_task()
     {
         if(xQueueReceive(ecep_data_len_que, (void *)&u32_data_len, portMAX_DELAY))
         {
+
+            ESP_LOGI(TAG, "Uart wee :D");
 
             // Take a copy of the shared memory:
             if(xSemaphoreTake(gs_raw_uart_shr_mem_sem, portMAX_DELAY) == pdTRUE)
@@ -62,67 +70,67 @@ void ecep_packet_handler_task()
 
             // Assemble ECEP package from uart data:
 
-            // byte_counter = 0; 
+            byte_counter = 0; 
 
-            // while(byte_counter < u32_data_len)
-            // {
+            while(byte_counter < u32_data_len)
+            {
 
-            //     if((u32_package_byte_counter >= ECEP_HEADER_SIZE) && (u32_package_byte_counter == u16_packet_len)) // Packet assembly complete
-            //     {
-            //         // KALD CMD HANDLER
+                if((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter == u16_packet_len)) // Packet assembly complete
+                {
+                    // KALD CMD HANDLER
 
-            //         // Reset Package byte counter and data:
-            //         u32_package_byte_counter = 0;
-            //         memset(u8_packet_data, 0, sizeof(u8_packet_data));
-            //     }
+                    // Reset Package byte counter and data:
+                    u32_package_byte_counter = 0;
+                    memset(u8_packet_data, 0, sizeof(u8_packet_data));
+                }
 
-            //     if(u32_package_byte_counter < ECEP_HEADER_SIZE)  // Header as not been fully read yet
-            //     {
-            //         // Read header 1 byte at a time:
-            //         u8_packet_data[u32_package_byte_counter] = au8_raw_uart_copy[byte_counter];
+                if(u32_package_byte_counter < ECEP_HEADER_LEN)  // Header as not been fully read yet
+                {
+                    // Read header 1 byte at a time:
+                    u8_packet_data[u32_package_byte_counter] = au8_raw_uart_copy[byte_counter];
 
-            //         u32_package_byte_counter++;
-            //         byte_counter++;
+                    u32_package_byte_counter++;
+                    byte_counter++;
 
-            //         if(u32_package_byte_counter == ECEP_HEADER_SIZE) // Header has been fully read
-            //         {
-            //             u8_packet_type  = u8_packet_data[0];
-            //             u8_cmd_evt_code = u8_packet_data[1];
-            //             u16_packet_len  = u8_packet_data[2] | (u8_packet_data[3] << 8);
+                    if(u32_package_byte_counter == ECEP_HEADER_LEN) // Header has been fully read
+                    {
+                        u8_packet_type  = u8_packet_data[0];
+                        u8_cmd_evt_code = u8_packet_data[1];
+                        u16_packet_len  = u8_packet_data[2] | (u8_packet_data[3] << 8);
 
-            //             ESP_LOGI(TAG, "Received Packet - u8_packet_type:  %08x", (uint32_t)u8_packet_type);
-            //             ESP_LOGI(TAG, "Received Packet - u8_cmd_evt_code: %08x", (uint32_t)u8_cmd_evt_code);
-            //             ESP_LOGI(TAG, "Received Packet - u16_packet_len:  %08x", (uint32_t)u16_packet_len);
+                        ESP_LOGI(TAG, "Received Packet - u8_packet_type:  %08x", (unsigned int)u8_packet_type);
+                        ESP_LOGI(TAG, "Received Packet - u8_cmd_evt_code: %08x", (unsigned int)u8_cmd_evt_code);
+                        ESP_LOGI(TAG, "Received Packet - u16_packet_len:  %08x", (unsigned int)u16_packet_len);
 
-            //             // Header error checks:
-            //             if (u8_packet_type != ECEP_PACKET_TYPE)
-            //             {
-            //                 // Something went wrong. Packets are now unsyncronized. Trying to fix by restarting.
-            //                 ESP_LOGI(TAG, "ERROR: invalid packet type");
-            //                 esp_restart(); 
-            //             }
-            //             if (u16_packet_len > ECEP_MAX_PACKAGE_SIZE)
-            //             {
-            //                 // Something went wrong. Packets are now unsyncronized. Trying to fix by restarting.
-            //                 ESP_LOGI(TAG, "ERROR: invalid packet length");
-            //                 esp_restart(); 
-            //             }
-            //         }
-            //     }
+                        // Header error checks:
+                        if (u8_packet_type != ECEP_PACKET_TYPE)
+                        {
+                            // Something went wrong. Packets are now unsyncronized. Trying to fix by restarting.
+                            ESP_LOGE(TAG, "ERROR: invalid packet type");
+                            esp_restart(); 
+                        }
+                        if (u16_packet_len > ECEP_MAX_CMD_PACKET_LEN)
+                        {
+                            // Something went wrong. Packets are now unsyncronized. Trying to fix by restarting.
+                            ESP_LOGE(TAG, "ERROR: invalid packet length");
+                            esp_restart(); 
+                        }
+                    }
+                }
 
-            //     if(u32_package_byte_counter >= ECEP_HEADER_SIZE) // Copy the rest of the package in big chunks (faster then extracting 1 byte at a time)
-            //     {
-            //         remaining_package_len = u16_packet_len - u32_package_byte_counter;
-            //         remaining_data_len = u32_data_len - byte_counter;
-            //         chunk_size_to_cpy = (remaning_package_size < remaining_data_len ? remaining_package_len : remaining_data_len);  // chunk size to copy is limited by either u16_packet_len or u32_data_len
+                if(u32_package_byte_counter >= ECEP_HEADER_LEN) // Copy the rest of the package in big chunks (faster then extracting 1 byte at a time)
+                {
+                    remaining_package_len = u16_packet_len - u32_package_byte_counter;
+                    remaining_data_len = u32_data_len - byte_counter;
+                    chunk_size_to_cpy = (remaining_package_len < remaining_data_len ? remaining_package_len : remaining_data_len);  // chunk size to copy is limited by either u16_packet_len or u32_data_len
 
-            //         memcpy(u8_packet_data[u32_package_byte_counter], au8_raw_uart_copy[byte_counter], chunk_size_to_cpy);
+                    memcpy(u8_packet_data[u32_package_byte_counter], au8_raw_uart_copy[byte_counter], chunk_size_to_cpy);
 
-            //         u32_package_byte_counter += chunk_size_to_cpy;
-            //         byte_counter += chunk_size_to_cpy;
-            //     }
+                    u32_package_byte_counter += chunk_size_to_cpy;
+                    byte_counter += chunk_size_to_cpy;
+                }
 
-            // }
+            }
 
 
 
@@ -147,7 +155,7 @@ void ecep_packet_handler_task()
 
 
             // header_offset = 0; 
-            // if(u32_package_byte_counter < ECEP_HEADER_SIZE)  // Header as not been fully read yet
+            // if(u32_package_byte_counter < ECEP_HEADER_LEN)  // Header as not been fully read yet
             // {
             //     for(header_offset; header_offset < u32_data_len; header_offset++) // Extract 1 byte at a time
             //     {
@@ -156,7 +164,7 @@ void ecep_packet_handler_task()
             //         u8_packet_data[u32_package_byte_counter] = au8_raw_uart_copy[header_offset];
             //         u32_package_byte_counter++;
 
-            //         if(u32_package_byte_counter == ECEP_HEADER_SIZE) // Header has been fully read
+            //         if(u32_package_byte_counter == ECEP_HEADER_LEN) // Header has been fully read
             //         {
             //             //Extract elements in header:
             //             u8_packet_type  = u8_packet_data[0];
@@ -174,7 +182,7 @@ void ecep_packet_handler_task()
             //                 ESP_LOGI(TAG, "ERROR: invalid packet type");
             //                 esp_restart(); 
             //             }
-            //             if (u16_packet_len > ECEP_MAX_PACKAGE_SIZE)
+            //             if (u16_packet_len > ECEP_MAX_CMD_PACKET_LEN)
             //             {
             //                 // Something went wrong. Packets are now unsyncronized. Trying to fix by restarting.
             //                 ESP_LOGI(TAG, "ERROR: invalid packet length");
@@ -188,7 +196,7 @@ void ecep_packet_handler_task()
             //     }
             // }
 
-            // if((u32_package_byte_counter >= ECEP_HEADER_SIZE) && (u32_package_byte_counter == u16_packet_len))  // Packet assembly complete
+            // if((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter == u16_packet_len))  // Packet assembly complete
             // {
             //     // CMD HANDLER
 
@@ -197,7 +205,7 @@ void ecep_packet_handler_task()
             // }
 
 
-            // if(u32_package_byte_counter >= ECEP_HEADER_SIZE)  // Copy the rest of the package in big chunks (faster then extracting 1 byte at a time)
+            // if(u32_package_byte_counter >= ECEP_HEADER_LEN)  // Copy the rest of the package in big chunks (faster then extracting 1 byte at a time)
             // {
             //     remaning_package_size = u16_packet_len - u32_package_byte_counter;
             //     chunk_size_to_cpy = (remaning_package_size < u32_data_len ? remaning_package_size : u32_data_len);  // chunk size to copy is limited by either u16_packet_len or u32_data_len
@@ -220,12 +228,12 @@ void ecep_packet_handler_task()
             // {
             //     u32_package_byte_counter++;
 
-            //     if(u32_package_byte_counter <= ECEP_HEADER_SIZE)
+            //     if(u32_package_byte_counter <= ECEP_HEADER_LEN)
             //     {
             //         u8_packet_data[u32_package_byte_counter-1] = au8_raw_uart_copy[byte_counter];
             //     }
 
-            //     if(u32_package_byte_counter == ECEP_HEADER_SIZE)
+            //     if(u32_package_byte_counter == ECEP_HEADER_LEN)
             //     {
             //         //Extract header:
             //         u8_packet_type  = u8_packet_data[0];
@@ -242,7 +250,7 @@ void ecep_packet_handler_task()
             //             ESP_LOGI(TAG, "ERROR: invalid packet type");
             //             return;
             //         }
-            //         if (u16_packet_len > ECEP_MAX_PACKAGE_SIZE)
+            //         if (u16_packet_len > ECEP_MAX_PACKET_LEN)
             //         {
             //             ESP_LOGI(TAG, "ERROR: invalid packet length");
             //             return;
@@ -359,15 +367,27 @@ void ecep_uart_event_task()
     }  
 }
 
+static void baud_error_test(int32_t i32_uart_num ,int32_t i32_baud)
+{
+    uint32_t u32_actual_baud;
+
+    uart_config_t baud_test_config = {
+    .baud_rate = i32_baud,
+    .data_bits = UART_DATA_8_BITS,
+    .parity = UART_PARITY_DISABLE,
+    .stop_bits = UART_STOP_BITS_1,
+    .flow_ctrl = ECEP_UART_CFG_FC,
+    .rx_flow_ctrl_thresh = 122,
+    .source_clk = UART_SCLK_DEFAULT,  // Default source clk is from APB (is fastest -> least baud to reg rounding error) 
+    };
+    uart_param_config(i32_uart_num, &baud_test_config);
+    uart_get_baudrate(i32_uart_num, &u32_actual_baud);
+    ESP_LOGI(TAG, "BAUD TEST. Set baud: %d  Actual baud: %d  Error ratio: %f", (int) i32_baud, (int) u32_actual_baud, (float)u32_actual_baud / (float)i32_baud);
+}
+
+
 void ecep_uart_init()
 {
-
-    // Ryk lige dem her til toppen:
-    #define ECEP_TXD_PIN  // FIND UD AF HVILKET GPIO DET ER  
-    #define ECEP_RXD_PIN  // FIND UD AF HVILKET GPIO DET ER  
-    #define ECEP_RTS_PIN UART_PIN_NO_CHANGE // Not used if HW flowcontrol is disabled
-    #define ECEP_CTS_PIN UART_PIN_NO_CHANGE // Not used if HW flowcontrol is disabled
-
     // ECEP UART config:
     uart_config_t ecep_uart_config = {
         .baud_rate = ECEP_UART_CFG_BAUD,
@@ -378,15 +398,18 @@ void ecep_uart_init()
         .rx_flow_ctrl_thresh = 122,
         .source_clk = UART_SCLK_DEFAULT,  // Default source clk is from APB (is fastest -> least baud to reg rounding error) // TEST LIGE
     };
-
     // Set ECEP UART config:
     ESP_ERROR_CHECK(uart_param_config(ECEP_UART_NUM, &ecep_uart_config));
-
     // Set ECEP UART pins:
-    //ESP_ERROR_CHECK(uart_set_pin(ECEP_UART_NUM, ECEP_TXD_PIN, ECEP_RXD_PIN, ECEP_RTS_PIN, ECEP_CTS_PIN));
-
+    ESP_ERROR_CHECK(uart_set_pin(ECEP_UART_NUM, ECEP_TXD_PIN, ECEP_RXD_PIN, ECEP_RTS_PIN, ECEP_CTS_PIN));
     // Install UART driver:
-    // ASDASDASD
+    ESP_ERROR_CHECK(uart_driver_install(ECEP_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 10, &ecep_uart_queue, 0));
+
+    // baud_error_test(UART_NUM_1, 115200);
+    // baud_error_test(UART_NUM_1, 230400);
+    // baud_error_test(UART_NUM_1, 460800);
+    // baud_error_test(UART_NUM_1, 576000);
+    // baud_error_test(UART_NUM_1, 921600);
 
     // Mutex for gs_au8_raw_uart_shr:
     gs_raw_uart_shr_mem_sem = xSemaphoreCreateMutex();    
