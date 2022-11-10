@@ -31,7 +31,7 @@
 #define ECEP_CMD_TRIG_PR_PRESS              16
 #define ECEP_CMD_SET_PR_DEF_STATE           17
 #define ECEP_CMD_FETCH_PR_DEF_STATE         18
-#define PING                                19
+#define ECEP_CMD_PING                       19
 
 // Event IDs
 #define ECEP_EVNT_COMMAND_STATUS            1
@@ -44,7 +44,7 @@
 #define ECEP_EVNT_CEN_FREQ                  8
 #define ECEP_EVNT_CEN_FREQ_AMP              9
 #define ECEP_EVNT_PR_DEF_STATE              10
-#define PONG                                11
+#define ECEP_EVNT_PONG                      11
 
 
 
@@ -56,10 +56,10 @@ typedef enum{
 } eAudio_channel_t;
 
 typedef enum{
-    amplitude_mV = 1, 
-    amplitude_dB_SPL = 2, 
-    power_mV = 3,
-} eFFT_output_format_t;
+    ampltitude_mV = 1,      // return result as amplitude in mV 
+    ampltitude_dB_SPL = 2,  // return result as amplitude in dB SPL
+    power_mV = 3,           // return result as power in mV 
+} eFFT_output_form_t;
 
 typedef enum{
     hann = 1, 
@@ -74,12 +74,12 @@ typedef enum{
     none = 1,
     amplitude = 2,
     energy = 3,
-} eFFT_corr_factor_t;
+} eFFT_wind_corr_factor_t;
 
-typedef enum{
-    dBSPL_90 = 1,
-    dBSPL_120 = 2,
-} eMIC_range_dBSPL_t;
+typedef enum {
+    up_to_90dB_SPL,
+    up_to_120dB_SPL,
+} eFFT_hw_gain_stage_t;
 
 typedef enum{
     norm_open = 1,
@@ -87,10 +87,11 @@ typedef enum{
 } eRelay_state_t;
 
 typedef enum{
-    ASA_SUCCESS = 1,
-    ASA_failed = 2,
-    ASA_errorcode1 = 3,
-    ASA_errorcode2 = 4,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!
+    ECEP_SUCCESS = 1,
+    ECEP_FAIL = 2,
+    ECEP_ERR_INVALID_ARG = 3,
+    ECEP_errorcode2 = 4,
+    ECEP_errorcode3 = 5,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!
 } eCMD_status_t;
 
 
@@ -98,10 +99,10 @@ typedef enum{
 
 typedef struct{
 
-    eFFT_output_format_t fft_output_format;
+    eFFT_output_form_t fft_output_format;
     eFFT_window_type_t fft_window;
     uint32_t fft_res_avg_count;
-    eFFT_corr_factor_t fft_corr_factor;
+    eFFT_wind_corr_factor_t fft_corr_factor;
 
 } sFFT_stgs_t;
 
@@ -110,11 +111,11 @@ typedef struct{
 typedef union uCommand_parameters{
 
     eAudio_channel_t channel;                   
-    eFFT_output_format_t fft_output_format;     
-    eFFT_output_format_t fft_window;      
+    eFFT_output_form_t fft_output_format;     
+    eFFT_window_type_t fft_window;      
     uint32_t fft_res_avg_count;
-    eFFT_corr_factor_t fft_corr_factor;                 
-    eMIC_range_dBSPL_t range;       
+    eFFT_wind_corr_factor_t fft_win_corr_factor;                 
+    eFFT_hw_gain_stage_t range;       
     uint32_t time;                              
     eRelay_state_t relay_default;  
                  
@@ -123,11 +124,12 @@ typedef union uCommand_parameters{
 
 typedef union uEvent_parameters{
 
+    eCMD_status_t status;
     sFFT_stgs_t FFT_stgs;
     uint32_t time;
     uint32_t cen_freq_hz;
     uint32_t cen_freq_amp;
-    eMIC_range_dBSPL_t range;   
+    eFFT_hw_gain_stage_t range;   
     eRelay_state_t relay_default;  
 
 } uEVNT_params_t;
@@ -144,48 +146,9 @@ typedef struct{
 typedef struct{
 
     uint8_t id;
-    eCMD_status_t status;
     uEVNT_params_t param;
 
 } sIntern_event_setup_t;
-
-
-// typedef struct
-// {
-//     int blaVar1;
-//     float blaVar2;
-// } s_event1_t;
-
-// typedef struct
-// {
-//     int blaVarr1;
-//     float blaVarr2;
-//     float blaVarr3;
-// } s_event2_t;
-
-
-
-// typedef union
-// {
-//     s_event1_t wee;
-//     s_event2_t wee2;
-// } ecep_events;
-
-
-// // Structure for queues:
-// typedef struct
-// {
-//     int Event  // Hvilket event det er (eventkoden) Så tasken ved hvordan den skal læse uEvents 
-
-//     ecep_events Params;     
-
-// } s_BlaBlaStruct_t;
-
-
-
-
-
-
 
 
 #endif /*ECEP_DEFINES_H_INCLUDED */
