@@ -37,10 +37,12 @@ static SemaphoreHandle_t gs_raw_uart_shr_mem_sem;
 static void ecep_command_handler(uint8_t u8_command_code, uint8_t * u8_params_and_bulk, uint16_t u8_params_and_bulk_len)
 {
 
-    for(int32_t i = 0; i < u8_params_and_bulk_len ; i++)
-    {
-        ESP_LOGI(TAG, "%c", u8_params_and_bulk[i]);
-    }
+    
+
+    // for(int32_t i = 0; i < u8_params_and_bulk_len ; i++)
+    // {
+    //     ESP_LOGI(TAG, "%c", u8_params_and_bulk[i]);
+    // }
 
 
 
@@ -61,7 +63,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t * u8_params_an
 
 }
 
-void ecep_packet_handler_task()
+void ecep_packet_handler_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task() I STEDET. Eller noget lignende.
 {
     uint32_t u32_data_len = 0; 
     uint8_t au8_raw_uart_copy[UART_RD_BUF_SIZE];
@@ -102,17 +104,6 @@ void ecep_packet_handler_task()
             while(byte_counter < u32_data_len)
             {
 
-                if((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter == u16_packet_len)) // Packet assembly complete
-                {
-                    ESP_LOGI(TAG, "Jamen Okay da ASDASD");
-
-                    ecep_command_handler(u8_command_code, u8_packet_data[4], u16_packet_len - ECEP_HEADER_LEN); // Pass packet without header
-
-                    // Reset Package byte counter and data:
-                    u32_package_byte_counter = 0;
-                    memset(u8_packet_data, 0, sizeof(u8_packet_data));
-                }
-
                 if(u32_package_byte_counter < ECEP_HEADER_LEN)  // Header as not been fully read yet
                 {
                     // Read header 1 byte at a time:
@@ -147,7 +138,7 @@ void ecep_packet_handler_task()
                     }
                 }
 
-                if(u32_package_byte_counter >= ECEP_HEADER_LEN) // Copy the rest of the package in big chunks (faster then extracting 1 byte at a time)
+                if((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter != u16_packet_len)) // Copy the rest of the package in big chunks (faster then extracting 1 byte at a time)
                 {
                     remaining_package_len = u16_packet_len - u32_package_byte_counter;
                     remaining_data_len = u32_data_len - byte_counter;
@@ -167,6 +158,18 @@ void ecep_packet_handler_task()
                     ESP_LOGE(TAG, "u32_package_byte_counter 2: %i", (int) u32_package_byte_counter);
                 }
 
+
+                if((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter == u16_packet_len)) // Packet assembly complete
+                {
+                    ESP_LOGI(TAG, "Jamen Okay da ASDASD");
+
+                    //ecep_command_handler(u8_command_code, u8_packet_data[4], u16_packet_len - ECEP_HEADER_LEN); // Pass packet without header
+
+                    // Reset Package byte counter and data:
+                    u32_package_byte_counter = 0;
+                    memset(u8_packet_data, 0, sizeof(u8_packet_data));
+                }
+
             }
 
 
@@ -179,8 +182,10 @@ void ecep_packet_handler_task()
 
             //     // DEN HER KOMMENTAR SKAL MÅSKE STÅ I CMD HANDLERE I STEDET. IDK:
             //     /* Bulk data is discarded since no command uses bulk data
-            //         (if bulk data for a command is needed in the future, add a Queue or Mutex protetected Shared Memory to pass to the relevenat task)
-            //         (for now: no need to have allocated shamed memory for bulk data if no commands uses it)
+            //         (if bulk data for a command is needed in the future, add a Queue or Mutex protetected Shared Memory to pass to the relevenat task.
+            //          for now: no need to have allocated shamed memory for bulk data if no command uses it.
+            //          ECEP_MAX_CMD_PACKET_LEN would also have to be increase if the new packet with bulk exceeds this size. consider creating the u8_packet_data array 
+            //          in PSRAM if the size gets too big)
             //     */
 
 
