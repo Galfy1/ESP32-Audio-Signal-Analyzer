@@ -103,11 +103,17 @@ typedef struct{
 
     eFFT_output_form_t fft_output_format;
     eFFT_window_type_t fft_window;
-    uint32_t fft_res_avg_count;
+    uint32_t u32_fft_res_avg_count;
     eFFT_wind_corr_factor_t fft_corr_factor;
 
 } sFFT_stgs_t;
 
+typedef struct{
+
+    uint8_t u8_parent_cmd_id;
+    eCMD_status_t status;
+
+} sStatus_event_t;
 
 // Paramter union
 typedef union uCommand_parameters{
@@ -115,21 +121,21 @@ typedef union uCommand_parameters{
     eAudio_channel_t channel;                   
     eFFT_output_form_t fft_output_format;     
     eFFT_window_type_t fft_window;      
-    uint32_t fft_res_avg_count;
+    uint32_t u32_fft_res_avg_count;
     eFFT_wind_corr_factor_t fft_win_corr_factor;                 
     eFFT_hw_gain_stage_t range;       
-    uint32_t time;
+    uint32_t u32_time;
                  
 } uCMD_params_t;
 
 
 typedef union uEvent_parameters{
 
-    eCMD_status_t status;
+    sStatus_event_t status_event;
     sFFT_stgs_t FFT_stgs;
-    uint32_t time;
-    uint32_t cen_freq_hz;
-    uint32_t cen_freq_amp;
+    uint32_t u32_time;
+    uint32_t u32_cen_freq_hz;
+    uint32_t u32_cen_freq_amp;
     eFFT_hw_gain_stage_t range;   
     eRelay_state_t pr_default;  
 
@@ -139,14 +145,14 @@ typedef union uEvent_parameters{
 // Command and event structs for internal task communication.
 typedef struct{
 
-    uint8_t id;
+    uint8_t u8_id;
     uCMD_params_t param;
 
 } sIntern_command_setup_t;
 
 typedef struct{
 
-    uint8_t id;
+    uint8_t u8_id;
     uEVNT_params_t param;
 
 } sIntern_event_setup_t;
