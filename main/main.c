@@ -116,7 +116,7 @@ void app_main(void)
     xTaskCreatePinnedToCore(dummy_task, "dummy_task", 4096, NULL, 4, NULL, 1); // Use core 1. 
     xTaskCreatePinnedToCore(patient_resp_task, "patient_resp_task", 4096, NULL, 4, NULL, 1); // Use core 1.     
     xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
-    xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 4096, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 8192, NULL, 4, NULL, 1);  // (Requires a stack size a bit larger than 4096 to not overflow it)
 
 
     // Amount of PSRAM left:

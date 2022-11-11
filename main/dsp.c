@@ -43,6 +43,8 @@ static float * gs_pf32_R_fft_res_shr;
 static SemaphoreHandle_t gs_fft_L_res_shr_mem_sem;
 static SemaphoreHandle_t gs_fft_R_res_shr_mem_sem;
 
+static QueueHandle_t gs_xQueue_event;
+
 // VED IKKE OM DE HER ARRAYS KAN NØJES MED AT VÆRE I DSP TASKSNE I STEDET
 // Arrayes are here 16bit alligned by the compiler in memory to eliminate any unsesessay memory accessesing overhead
 // See: http://www.songho.ca/misc/alignment/dataalign.html for more info
@@ -280,7 +282,8 @@ void dsp_init(float * pf32_adc1_shared,
               float * pf32_L_fft_res_shr, 
               float * pf32_R_fft_res_shr,
               SemaphoreHandle_t fft_L_res_shr_mem_sem,
-              SemaphoreHandle_t fft_R_res_shr_mem_sem)
+              SemaphoreHandle_t fft_R_res_shr_mem_sem,
+              QueueHandle_t xQueue_event)
 {
     gs_pf32_adc1_shared = pf32_adc1_shared;
     gs_pf32_adc2_shared = pf32_adc2_shared;
@@ -291,6 +294,8 @@ void dsp_init(float * pf32_adc1_shared,
     gs_pf32_R_fft_res_shr = pf32_R_fft_res_shr;
     gs_fft_L_res_shr_mem_sem = fft_L_res_shr_mem_sem;
     gs_fft_R_res_shr_mem_sem = fft_R_res_shr_mem_sem;
+
+    gs_xQueue_event = xQueue_event;
 
     calc_fft_duration_ms();
 

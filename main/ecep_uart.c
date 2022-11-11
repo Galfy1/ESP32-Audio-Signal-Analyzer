@@ -39,10 +39,10 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t * u8_params_an
 
     
 
-    // for(int32_t i = 0; i < u8_params_and_bulk_len ; i++)
-    // {
-    //     ESP_LOGI(TAG, "%c", u8_params_and_bulk[i]);
-    // }
+    for(int32_t i = 0; i < u8_params_and_bulk_len ; i++)
+    {
+        ESP_LOGI(TAG, "0x%04x", u8_params_and_bulk[i]);
+    }
 
 
 
@@ -52,7 +52,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t * u8_params_an
             break;
         
         case 0x08:
-            ESP_LOGI(TAG, "Jamen Okay da");
+            ESP_LOGI(TAG, "Pizza lets goo");
 
             break;
 
@@ -93,7 +93,7 @@ void ecep_packet_handler_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task()
             {
                memcpy(au8_raw_uart_copy, gs_au8_raw_uart_shr, sizeof(au8_raw_uart_copy)); 
                xSemaphoreGive(gs_raw_uart_shr_mem_sem);     
-            }
+        }
 
 
 
@@ -163,7 +163,7 @@ void ecep_packet_handler_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task()
                 {
                     ESP_LOGI(TAG, "Jamen Okay da ASDASD");
 
-                    //ecep_command_handler(u8_command_code, u8_packet_data[4], u16_packet_len - ECEP_HEADER_LEN); // Pass packet without header
+                    ecep_command_handler(u8_command_code, &u8_packet_data[4], u16_packet_len - ECEP_HEADER_LEN); // Pass packet without header
 
                     // Reset Package byte counter and data:
                     u32_package_byte_counter = 0;
@@ -190,140 +190,13 @@ void ecep_packet_handler_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task()
 
 
 
-
-            
-
-            // et forsøg (ikke korrekt):
-
-
-            // header_offset = 0; 
-            // if(u32_package_byte_counter < ECEP_HEADER_LEN)  // Header as not been fully read yet
-            // {
-            //     for(header_offset; header_offset < u32_data_len; header_offset++) // Extract 1 byte at a time
-            //     {
-
-            //         // Read header:
-            //         u8_packet_data[u32_package_byte_counter] = au8_raw_uart_copy[header_offset];
-            //         u32_package_byte_counter++;
-
-            //         if(u32_package_byte_counter == ECEP_HEADER_LEN) // Header has been fully read
-            //         {
-            //             //Extract elements in header:
-            //             u8_packet_type  = u8_packet_data[0];
-            //             u8_command_code = u8_packet_data[1];
-            //             u16_packet_len  = u8_packet_data[2] | (u8_packet_data[3] << 8);
-
-            //             ESP_LOGI(TAG, "Received Packet - u8_packet_type:  %08x", (uint32_t)u8_packet_type);
-            //             ESP_LOGI(TAG, "Received Packet - u8_command_code: %08x", (uint32_t)u8_command_code);
-            //             ESP_LOGI(TAG, "Received Packet - u16_packet_len:  %08x", (uint32_t)u16_packet_len);
-
-            //             // Header error checks:
-            //             if (u8_packet_type != ECEP_PACKET_TYPE)
-            //             {
-            //                 // Something went wrong. Packets are now unsyncronized. Trying to fix by restarting.
-            //                 ESP_LOGI(TAG, "ERROR: invalid packet type");
-            //                 esp_restart(); 
-            //             }
-            //             if (u16_packet_len > ECEP_MAX_CMD_PACKET_LEN)
-            //             {
-            //                 // Something went wrong. Packets are now unsyncronized. Trying to fix by restarting.
-            //                 ESP_LOGI(TAG, "ERROR: invalid packet length");
-            //                 esp_restart(); 
-            //             }
-
-            //             break;  
-            //             // PROBLEM... Nu ved vi ikke ude fra det loop her, hvor mange bytes vi har læst fra au8_raw_uart_copy...æ
-            //             // Måske lave det til et while loop i stedet ? 
-            //         }
-            //     }
-            // }
-
-            // if((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter == u16_packet_len))  // Packet assembly complete
-            // {
-            //     // CMD HANDLER
-
-            //     // RESET u32_package_byte_counter og packet data arreyed
-
-            // }
-
-
-            // if(u32_package_byte_counter >= ECEP_HEADER_LEN)  // Copy the rest of the package in big chunks (faster then extracting 1 byte at a time)
-            // {
-            //     remaning_package_size = u16_packet_len - u32_package_byte_counter;
-            //     chunk_size_to_cpy = (remaning_package_size < u32_data_len ? remaning_package_size : u32_data_len);  // chunk size to copy is limited by either u16_packet_len or u32_data_len
-
-            //     memcpy(u8_packet_data[u32_package_byte_counter], au8_raw_uart_copy[header_offset], chunk_size_to_cpy);
-            //     u32_package_byte_counter += chunk_size_to_cpy;
-
-            // }
-
-
-
-
-
-
-
-
-            // Bruges ikke længere:
-
-            // for(uint32_t byte_counter = 0 ; byte_counter < u32_data_len; byte_counter++)
-            // {
-            //     u32_package_byte_counter++;
-
-            //     if(u32_package_byte_counter <= ECEP_HEADER_LEN)
-            //     {
-            //         u8_packet_data[u32_package_byte_counter-1] = au8_raw_uart_copy[byte_counter];
-            //     }
-
-            //     if(u32_package_byte_counter == ECEP_HEADER_LEN)
-            //     {
-            //         //Extract header:
-            //         u8_packet_type  = u8_packet_data[0];
-            //         u8_command_code = u8_packet_data[1];
-            //         u16_packet_len  = u8_packet_data[2] | (u8_packet_data[3] << 8);
-
-            //         ESP_LOGI(TAG, "Received Packet - u8_packet_type:  %08x", (uint32_t)u8_packet_type);
-            //         ESP_LOGI(TAG, "Received Packet - u8_command_code: %08x", (uint32_t)u8_command_code);
-            //         ESP_LOGI(TAG, "Received Packet - u16_packet_len:  %08x", (uint32_t)u16_packet_len);
-
-            //         // Header error checks:
-            //         if (u8_packet_type != ECEP_PACKET_TYPE)
-            //         {
-            //             ESP_LOGI(TAG, "ERROR: invalid packet type");
-            //             return;
-            //         }
-            //         if (u16_packet_len > ECEP_MAX_PACKET_LEN)
-            //         {
-            //             ESP_LOGI(TAG, "ERROR: invalid packet length");
-            //             return;
-            //         }
-            //     }
-
-
-                
-
-
-            // if(u32_package_byte_counter == u16_packet_len)
-            // {
-            //     // KALD COMMAND HANDLER
-
-            //     //RESET PAKKE:
-            //     //RESET PACKAGEVBYTE COUNTER
-            //     // RESET PACKET DATA
-            // }
-
-
-
-
-
-
         }
     }
 }
 
 
 //Note: "uart events" refeers to the esp uart api. Dont confuse this "event" with ECEP events.
-void ecep_uart_event_task()
+void ecep_uart_event_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task() I STEDET. Eller noget lignende.
 {
     uart_event_t event;
 
