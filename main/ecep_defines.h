@@ -29,7 +29,7 @@
 #define ECEP_CMD_TRIG_PR_HOLD               14
 #define ECEP_CMD_TRIG_PR_RELEASE            15
 #define ECEP_CMD_TRIG_PR_PRESS              16
-#define ECEP_CMD_SET_PR_DEF_STATE           17
+#define ECEP_CMD_TOG_PR_DEF_STATE           17
 #define ECEP_CMD_FETCH_PR_DEF_STATE         18
 #define ECEP_CMD_PING                       19
 
@@ -77,8 +77,8 @@ typedef enum{
 } eFFT_wind_corr_factor_t;
 
 typedef enum {
-    up_to_90dB_SPL,
-    up_to_120dB_SPL,
+    up_to_90dB_SPL = 1,
+    up_to_120dB_SPL = 2,
 } eFFT_hw_gain_stage_t;
 
 typedef enum{
@@ -90,8 +90,10 @@ typedef enum{
     ECEP_SUCCESS = 1,
     ECEP_FAIL = 2,
     ECEP_ERR_INVALID_ARG = 3,
-    ECEP_errorcode2 = 4,
-    ECEP_errorcode3 = 5,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!
+    ECEP_ERR_IVALID_CMD = 4,
+    ECEP_ERR_UNKNOWN = 5,
+    ECEP_errorcode2 = 6,
+    ECEP_errorcode3 = 7,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!
 } eCMD_status_t;
 
 
@@ -116,8 +118,7 @@ typedef union uCommand_parameters{
     uint32_t fft_res_avg_count;
     eFFT_wind_corr_factor_t fft_win_corr_factor;                 
     eFFT_hw_gain_stage_t range;       
-    uint32_t time;                              
-    eRelay_state_t relay_default;  
+    uint32_t time;
                  
 } uCMD_params_t;
 
@@ -130,7 +131,7 @@ typedef union uEvent_parameters{
     uint32_t cen_freq_hz;
     uint32_t cen_freq_amp;
     eFFT_hw_gain_stage_t range;   
-    eRelay_state_t relay_default;  
+    eRelay_state_t pr_default;  
 
 } uEVNT_params_t;
 

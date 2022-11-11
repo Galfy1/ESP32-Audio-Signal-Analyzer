@@ -14,8 +14,6 @@
 static const char *PATIENT_RESP_TAG = "patient_response.c";
 
 #define CLICK_DELAY 20 / portTICK_PERIOD_MS // Delay in ms
-#define GPIO_HIGH 1
-#define GPIO_LOW 0
 #define GPIO_PR_PIN GPIO_NUM_6  // 
 
 #define MAX_PRESS_DUR 120000    // No more than 2^32 (large values not recommended)
@@ -25,10 +23,6 @@ static uint8_t gs_u8_default_gpio_level = GPIO_LOW;
 
 static QueueHandle_t gs_xQueue_pr_cmd;
 static QueueHandle_t gs_xQueue_event;
-
-// typedef static enum{
-
-// } ePR_events;
 
 static void patient_resp_hold(sIntern_event_setup_t *pr_hold_event)
 {   
@@ -66,7 +60,7 @@ static void patient_resp_release(sIntern_event_setup_t *pr_release_event)
     }
 }
 
-static void patient_resp_press(int press_time, sIntern_event_setup_t *pr_press_event)
+static void patient_resp_press(uint32_t press_time, sIntern_event_setup_t *pr_press_event)
 {
     pr_press_event->id = ECEP_EVNT_COMMAND_STATUS;
 
@@ -120,7 +114,6 @@ static void patient_resp_click(sIntern_event_setup_t *pr_click_event)
 static void patient_resp_cdl(sIntern_event_setup_t *pr_cld_event) // Change default gpio level (cdl). If high --> low, if low --> high.
 {   
     pr_cld_event->id = ECEP_EVNT_COMMAND_STATUS;
-
     if (gpio_get_level(GPIO_PR_PIN) == gs_u8_default_gpio_level)
     {   
         gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN));
@@ -137,49 +130,30 @@ static void patient_resp_cdl(sIntern_event_setup_t *pr_cld_event) // Change defa
     
 }
 
-
-
-static const char *DUMMY_TASK = "Dummy_task";
-
-void dummy_task() // Slettes når færdig!!!
+static void patient_resp_fetch_def_state(sIntern_event_setup_t *pr_def_state_event)
 {   
-    sIntern_command_setup_t cmd_send;
-    sIntern_event_setup_t esp_event;
+    ESP_LOGI(PATIENT_RESP_TAG, "default gpio level: %i", (int) gs_u8_default_gpio_level);
 
-    // TRIG_PR_CLICK
-    // TRIG_PR_HOLD
-    // TRIG_PR_RELEASE
-    // TRIG_PR_PRESS
-    // SET_PR_DEFAULT_STATE
-
-    cmd_send.id = ECEP_CMD_TRIG_PR_PRESS;
-    cmd_send.param.time = 5000;
-
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
-    
-    xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
-
-    while(1)
+    if(gs_u8_default_gpio_level == GPIO_HIGH)
     {
-        if( xQueueReceive(gs_xQueue_event, &esp_event, 0) == pdTRUE){
-            if(esp_event.param.status == ECEP_SUCCESS){
-                ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_SUCCESS", esp_event.id);
-            }
-            else if(esp_event.param.status == ECEP_FAIL){
-                ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_FAIL", esp_event.id);
-            }
-            else if(esp_event.param.status == ECEP_ERR_INVALID_ARG){
-                ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_ERR_INVALID_ARG", esp_event.id);
-            }
-
-        }
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        pr_def_state_event->id = ECEP_EVNT_PR_DEF_STATE;
+        pr_def_state_event->param.pr_default = norm_closed;
+    }
+    else if (gs_u8_default_gpio_level == GPIO_LOW)
+    {
+        pr_def_state_event->id = ECEP_EVNT_PR_DEF_STATE;
+        pr_def_state_event->param.pr_default = norm_open;
+    }
+    else
+    {
+        pr_def_state_event->id = ECEP_EVNT_COMMAND_STATUS;
+        pr_def_state_event->param.status = ECEP_ERR_UNKNOWN;
     }
 }
 
 void patient_resp_task()
 {
-
+    
     sIntern_command_setup_t user_command;
     sIntern_event_setup_t pr_event;
 
@@ -217,20 +191,22 @@ void patient_resp_task()
                 patient_resp_press(user_command.param.time, &pr_event);
                 break;
 
-            case ECEP_CMD_SET_PR_DEF_STATE:
+            case ECEP_CMD_TOG_PR_DEF_STATE:
                 patient_resp_cdl(&pr_event);
                 break;
             
             case ECEP_CMD_FETCH_PR_DEF_STATE:
-                ESP_LOGI(PATIENT_RESP_TAG, "default gpio level: %i", (int) gs_u8_default_gpio_level);
-
+                patient_resp_fetch_def_state(&pr_event);
+                break;
+                
             default:
+                pr_event.id = ECEP_EVNT_COMMAND_STATUS;
+                pr_event.param.status = ECEP_ERR_IVALID_CMD;
+                ESP_LOGE(PATIENT_RESP_TAG, "Invalid command id %i passed to patient response task", (int) user_command.id);
                 break;
             }
 
-            xQueueSend(gs_xQueue_event, &pr_event, 0);
-                // user_command;
-                // pr_event;            
+            xQueueSend(gs_xQueue_event, &pr_event, 0);        
         }
 
         vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -243,3 +219,64 @@ void patient_resp_init(QueueHandle_t xQueue_pr_cmd, QueueHandle_t xQueue_event)
     gs_xQueue_pr_cmd = xQueue_pr_cmd;
     gs_xQueue_event = xQueue_event;
 }
+
+// static const char *DUMMY_TASK = "Dummy_task";
+
+// void dummy_task() // Slettes når færdig!!!
+// {   
+//     sIntern_command_setup_t cmd_send;
+//     sIntern_event_setup_t esp_event;
+
+//     // TRIG_PR_CLICK
+//     // TRIG_PR_HOLD
+//     // TRIG_PR_RELEASE
+//     // TRIG_PR_PRESS
+//     // SET_PR_DEFAULT_STATE
+
+//     // cmd_send.param.time = 5000;
+    
+//     vTaskDelay(4000 / portTICK_PERIOD_MS);
+
+//     cmd_send.id = ECEP_CMD_TOG_PR_DEF_STATE;
+//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     cmd_send.id = ECEP_CMD_FETCH_PR_DEF_STATE;
+//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     cmd_send.id = ECEP_CMD_TRIG_PR_HOLD;
+//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     cmd_send.id = ECEP_CMD_TOG_PR_DEF_STATE;
+//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     cmd_send.id = ECEP_CMD_FETCH_PR_DEF_STATE;
+//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     cmd_send.id = ECEP_CMD_TRIG_PR_RELEASE;
+//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+
+//     while(1)
+//     {
+//         if( xQueueReceive(gs_xQueue_event, &esp_event, 0) == pdTRUE)
+//         {
+//             if (esp_event.id == ECEP_EVNT_PR_DEF_STATE){
+//                 if(esp_event.param.pr_default == norm_closed){
+//                     ESP_LOGI(DUMMY_TASK, "Command id: %i - norm_closed", esp_event.id);
+//                 }
+//                 else if(esp_event.param.pr_default == norm_open){
+//                     ESP_LOGI(DUMMY_TASK, "Command id: %i - norm_open", esp_event.id);
+//                 }
+//             }
+//             else if(esp_event.id == ECEP_EVNT_COMMAND_STATUS){
+//                 if(esp_event.param.status == ECEP_SUCCESS){
+//                     ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_SUCCESS", esp_event.id);
+//                 }
+//                 else if(esp_event.param.status == ECEP_FAIL){
+//                     ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_FAIL", esp_event.id);
+//                 }
+//                 else if(esp_event.param.status == ECEP_ERR_INVALID_ARG){
+//                     ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_ERR_INVALID_ARG", esp_event.id);
+//                 }
+//                 else if(esp_event.param.status == ECEP_ERR_UNKNOWN){
+//                     ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_ERR_UNKNOWN", esp_event.id);
+//                 }
+//             }
+//         }
+//         vTaskDelay(1000 / portTICK_PERIOD_MS);
+//     }
+// }
