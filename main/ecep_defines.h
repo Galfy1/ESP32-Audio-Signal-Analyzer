@@ -50,6 +50,7 @@
 #define ECEP_EVNT_PONG                      0x0B
 
 
+// DE SKAL MÅSKE HAVE ECEP PREFIX FORAN SIG:
 
 // parameter enums (for both commands and events)
 typedef enum{
@@ -92,8 +93,8 @@ typedef enum{
 typedef enum{
     ECEP_SUCCESS = 1,
     ECEP_FAIL = 2,
-    ECEP_ERR_INVALID_ARG = 3,
-    ECEP_ERR_IVALID_CMD = 4,
+    ECEP_ERR_INVALID_PARAM = 3,
+    ECEP_ERR_INVALID_CMD = 4,
     ECEP_ERR_UNKNOWN = 5,
     ECEP_errorcode2 = 6,
     ECEP_errorcode3 = 7,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!

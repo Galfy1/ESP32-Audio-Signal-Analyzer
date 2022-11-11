@@ -30,7 +30,7 @@ eFFT_output_form_t   gs_fft_out_format       = DFLT_FFT_OUTPUT_FORMAT;
 eFFT_window_type_t   gs_window_used          = DFLT_WIND_USED;
 int32_t              gs_i32_fft_avg_max_cnt  = DFLT_FFT_AVG_MAX_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
 eFFT_hw_gain_stage_t gs_hw_gain_stage      = DFLT_HW_GAIN_STAGE;
-eFFT_window_corr_factor_t gs_wind_corr_factor = DFLT_WIND_CORR_FACTOR;
+eFFT_wind_corr_factor_t gs_wind_corr_factor = DFLT_WIND_CORR_FACTOR;
 
 float gs_f32_total_fft_dur_ms;  // The total duration of the averaged FFT result in ms
 
@@ -44,7 +44,8 @@ static float * gs_pf32_R_fft_res_shr;
 static SemaphoreHandle_t gs_fft_L_res_shr_mem_sem;
 static SemaphoreHandle_t gs_fft_R_res_shr_mem_sem;
 
-static QueueHandle_t gs_xQueue_event;
+static QueueHandle_t gs_xQueue_dsp_ecep_cmds;
+static QueueHandle_t gs_xQueue_ecep_events;
 
 // VED IKKE OM DE HER ARRAYS KAN NØJES MED AT VÆRE I DSP TASKSNE I STEDET
 // Arrayes are here 16bit alligned by the compiler in memory to eliminate any unsesessay memory accessesing overhead
@@ -63,7 +64,7 @@ static float   gs_f32_R_cent_freq_val;
 // For Spectral Estimation: Welch's method is used with 0% overlap 
 
 // IKKE TESTET:
-void calc_fft_duration_ms()
+static void calc_fft_duration_ms()
 {
     gs_f32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * 1000.0 * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt;
 }
@@ -76,7 +77,7 @@ void calc_fft_duration_ms()
  * @param[out] p_cent_freq_idx 
  * @param[out] p_cent_freq_val 
  */
-void find_cent_freq(float * array, int32_t array_size, int32_t * p_cent_freq_idx, float * p_cent_freq_val)
+static void find_cent_freq(float * array, int32_t array_size, int32_t * p_cent_freq_idx, float * p_cent_freq_val)
 {
     float temp_val;
     float biggest_val = 0;
@@ -117,6 +118,125 @@ void find_cent_freq(float * array, int32_t array_size, int32_t * p_cent_freq_idx
 //     // First half of x1 is aplitude values. Second half is junk.
 //     dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
 // }
+
+
+// MÅSKE PLACER DEN HER I ecep_uart.c HVIS DEN BRUGES MANGE STEDDER. IDK
+// MÅSKE LAV EN FUNKTION TIL HVER EVENT I ecep_uart.c, SOM SAMLER TINGENE OG LIGGER DEM I EVENT KØEN LIGESOM HER.
+static void send_ecep_status_event(eCMD_status_t status_type, uint8_t u8_cmd_id)
+{
+    sIntern_event_setup_t event;
+
+    event.u8_id = ECEP_EVNT_COMMAND_STATUS;
+    event.param.status_event.u8_parent_cmd_id = u8_cmd_id;
+    event.param.status_event.status = status_type;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(DSP_TAG, "ERROR: in send_ecep_status_event(). Event queue is full"); 
+    }
+}
+
+void dsp_ecep_handler_task()
+{
+
+    eFFT_output_form_t output_form_temp;
+    eFFT_window_type_t wind_type_temp;
+
+    sIntern_command_setup_t dsp_ecep_command;
+    uint8_t u8_ecep_cmd_id;
+
+    // HUSK AT UPDATE VORES TASK DIAGRAM
+
+    while(1)
+    {
+
+        if(xQueueReceive(gs_xQueue_dsp_ecep_cmds, (void *)&dsp_ecep_command, portMAX_DELAY))
+        {
+            u8_ecep_cmd_id = dsp_ecep_command.u8_id;
+
+            switch(u8_ecep_cmd_id)
+            {
+                case ECEP_CMD_FETCH_FFT: 
+                    //ASD
+                    break;
+
+                case ECEP_CMD_SET_FFT_OUTP_FORM: 
+                    output_form_temp = dsp_ecep_command.param.fft_output_format;
+
+                    if((output_form_temp!=ampltitude_mV) && (output_form_temp!=ampltitude_dB_SPL) && (output_form_temp!=power_mV))
+                    {
+                        send_ecep_status_event(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_FFT_OUTP_FORM);
+                        ESP_LOGE(DSP_TAG, "ERROR: in dsp_ecep_handler_task(). Invalid param for ECEP_CMD_SET_FFT_OUTP_FORM");
+                        break; // Ignore the command
+                    }
+
+                    // Execute command:
+                    gs_fft_out_format = output_form_temp;
+                    send_ecep_status_event(ECEP_SUCCESS, ECEP_CMD_SET_FFT_OUTP_FORM);
+                    break;
+
+                case ECEP_CMD_SET_FFT_WIND_TYPE: 
+                    wind_type_temp = dsp_ecep_command.param.fft_window;
+
+                    if((wind_type_temp!=hann) && (wind_type_temp!=blackman) && (wind_type_temp!=blackman_harris) 
+                       && (wind_type_temp!=blackman_nuttall) && (wind_type_temp!=nuttall) && (wind_type_temp!=flat_top))
+                    {
+                        send_ecep_status_event(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_FFT_WIND_TYPE);
+                        ESP_LOGE(DSP_TAG, "ERROR: in dsp_ecep_handler_task(). Invalid param for ECEP_CMD_SET_FFT_WIND_TYPE");
+                        break; // Ignore the command
+                    }
+
+                    // Execute command:
+                    gs_window_used = dsp_ecep_command.param.fft_window;
+                    send_ecep_status_event(ECEP_SUCCESS, ECEP_CMD_SET_FFT_WIND_TYPE);
+                    break;
+
+                case ECEP_CMD_SET_FFT_RES_AVG_CT: 
+                    gs_i32_fft_avg_max_cnt = dsp_ecep_command.param.u32_fft_res_avg_count;
+                    // BEREGN FFT TOTAL TIME FORFRA!!!
+                    send_ecep_status_event(ECEP_SUCCESS, ECEP_CMD_SET_FFT_WIND_TYPE);
+                    break;
+
+                case ECEP_CMD_SET_WIND_CORR_FACTOR: 
+                    //ASD
+                    break;
+
+                case ECEP_CMD_FETCH_FFT_STGS: 
+                    //ASD
+                    break;
+
+                case ECEP_CMD_FETCH_FFT_TOTAL_DUR: 
+                    //ASD
+                    break;
+
+                case ECEP_CMD_FETCH_ADC_RAW_DATA: 
+                    //ASD
+                    break;
+
+                case ECEP_CMD_FETCH_CEN_FREQ: 
+                    //ASD
+                    break;
+
+                case ECEP_CMD_FETCH_CEN_FREQ_AMP: 
+                    //ASD
+                    break;
+
+                case ECEP_CMD_SET_MIC_RANGE: 
+                    //ASD
+                    break;
+
+                case ECEP_CMD_FETCH_MIC_RANGE: 
+                    //ASD
+                    break;
+
+                default:
+                    ESP_LOGE(DSP_TAG, "ERROR: in dsp_ecep_handler_task(). A command not relevant to dsp was located in gs_xQueue_dsp_ecep_cmds");
+                    break;
+            }
+        }
+
+    }
+}
 
 
 void dsp_left_ch_task()
@@ -284,7 +404,8 @@ void dsp_init(float * pf32_adc1_shared,
               float * pf32_R_fft_res_shr,
               SemaphoreHandle_t fft_L_res_shr_mem_sem,
               SemaphoreHandle_t fft_R_res_shr_mem_sem,
-              QueueHandle_t xQueue_event)
+              QueueHandle_t xQueue_ecep_events,
+              QueueHandle_t xQueue_dsp_ecep_cmds)
 {
     gs_pf32_adc1_shared = pf32_adc1_shared;
     gs_pf32_adc2_shared = pf32_adc2_shared;
@@ -296,7 +417,8 @@ void dsp_init(float * pf32_adc1_shared,
     gs_fft_L_res_shr_mem_sem = fft_L_res_shr_mem_sem;
     gs_fft_R_res_shr_mem_sem = fft_R_res_shr_mem_sem;
 
-    gs_xQueue_event = xQueue_event;
+    gs_xQueue_ecep_events = xQueue_ecep_events;
+    gs_xQueue_dsp_ecep_cmds = xQueue_dsp_ecep_cmds;
 
     calc_fft_duration_ms();
 

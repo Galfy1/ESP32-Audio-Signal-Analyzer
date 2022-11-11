@@ -36,8 +36,9 @@ void app_main(void)
     TaskHandle_t dsp_left_task_handle;
     TaskHandle_t dsp_right_task_handle;
 
-    QueueHandle_t xQueue_pr_cmd;
-    QueueHandle_t xQueue_event;
+    QueueHandle_t xQueue_ecep_events;         // Queue for ECEP events  
+    QueueHandle_t xQueue_pr_ecep_cmds;        // Queue for ECEP commands for patient_resp_task  
+    QueueHandle_t xQueue_dsp_ecep_cmds;  // Queue for ECEP commands for dsp_ecep_handler_task()
     
     ESP_LOGI(TAG, "DET VIRKER :D");
 
@@ -72,9 +73,10 @@ void app_main(void)
     }
     
     // Create queues:
-    xQueue_pr_cmd = xQueueCreate(10, sizeof(sIntern_command_setup_t));
-    xQueue_event = xQueueCreate(10, sizeof(sIntern_event_setup_t));
-    if ((xQueue_pr_cmd == NULL) || (xQueue_event == NULL))
+    xQueue_pr_ecep_cmds = xQueueCreate(10, sizeof(sIntern_command_setup_t));
+    xQueue_ecep_events = xQueueCreate(10, sizeof(sIntern_event_setup_t));
+    xQueue_dsp_ecep_cmds = xQueueCreate(10, sizeof(sIntern_command_setup_t));
+    if ((xQueue_pr_ecep_cmds == NULL) || (xQueue_ecep_events == NULL) || (xQueue_dsp_ecep_cmds == NULL))
     {
         ESP_LOGE(TAG, "ERROR: while creating one or more queues");
     }
@@ -94,11 +96,13 @@ void app_main(void)
         pf32_L_fft_res_shr,
         pf32_R_fft_res_shr,
         fft_L_res_shr_mem_sem,
-        fft_R_res_shr_mem_sem);
+        fft_R_res_shr_mem_sem,
+        xQueue_ecep_events,
+        xQueue_dsp_ecep_cmds);
 
     patient_resp_init(
-        xQueue_pr_cmd,
-        xQueue_event);
+        xQueue_pr_ecep_cmds,
+        xQueue_ecep_events);
 
     ecep_uart_init();
 
