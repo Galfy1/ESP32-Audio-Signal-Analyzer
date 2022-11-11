@@ -12,6 +12,7 @@
 #include "dsp.h"
 #include "common_defines.h"
 #include "fft_wrapper.h"
+#include "ecep_defines.h"
 
 static const char *DSP_TAG = "DSP.C";
 
@@ -31,7 +32,7 @@ eFFT_window_type_t   gs_window_used          = DFLT_WIND_USED;
 int32_t              gs_i32_fft_avg_max_cnt  = DFLT_FFT_AVG_MAX_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
 eFFT_hw_gain_stage_t gs_hw_gain_stage_L      = DFLT_HW_GAIN_STAGE_L;
 eFFT_hw_gain_stage_t gs_hw_gain_stage_R      = DFLT_HW_GAIN_STAGE_R;
-eFFT_window_corr_factor_t gs_wind_corr_factor = DFLT_WIND_CORR_FACTOR;
+eFFT_wind_corr_factor_t gs_wind_corr_factor = DFLT_WIND_CORR_FACTOR;
 
 float gs_f32_total_fft_dur_ms;  // The total duration of the averaged FFT result in ms
 
