@@ -12,6 +12,7 @@
 #include "dsp.h"
 #include "common_defines.h"
 #include "fft_wrapper.h"
+#include "ecep_defines.h"
 
 static const char *DSP_TAG = "DSP.C";
 

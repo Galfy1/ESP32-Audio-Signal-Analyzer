@@ -8,6 +8,7 @@
 
 #include "fft_wrapper.h"
 #include "common_defines.h"
+#include "ecep_defines.h"
 
 static const char *TAG = "fft_wrapper"; 
 
@@ -145,7 +146,7 @@ static esp_err_t calc_wind_correction_factors()
     return ESP_OK;
 }
 
-static float get_selected_corr_factor(eFFT_window_corr_factor_t eFFT_window_corr_factor)
+static float get_selected_corr_factor(eFFT_wind_corr_factor_t eFFT_window_corr_factor)
 {
     switch(eFFT_window_corr_factor)
     {
@@ -258,7 +259,7 @@ esp_err_t conv_ampl_mv_to_ampl_db_spl(float * pf32_data, int32_t i32_bin_size, e
  * @param[in] eFFT_window_corr_factor The window correction factor type
  * @return esp_err_t 
  */
-static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db_spl, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_window_corr_factor_t eFFT_window_corr_factor)
+static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, bool b_result_in_db_spl, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_wind_corr_factor_t eFFT_window_corr_factor)
 {
     // Obtain the selected window-correction-factor for the window in use:
     float f32_selected_wind_corr_factor = get_selected_corr_factor(eFFT_window_corr_factor);
@@ -289,7 +290,7 @@ static esp_err_t conv_fft_res_to_ampl(float * pf32_data, int32_t i32_bin_size, b
  * @param[in] eFFT_window_corr_factor The window correction factor type
  * @return esp_err_t 
  */
-static esp_err_t conv_fft_res_to_pow(float * pf32_data, int32_t i32_bin_size, eFFT_window_corr_factor_t eFFT_window_corr_factor)
+static esp_err_t conv_fft_res_to_pow(float * pf32_data, int32_t i32_bin_size, eFFT_wind_corr_factor_t eFFT_window_corr_factor)
 {
     // Obtain the selected window-correction-factor for the window in use:
     float f32_selected_wind_corr_factor = get_selected_corr_factor(eFFT_window_corr_factor);  
@@ -360,7 +361,7 @@ esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
 
 
 
-esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_window_corr_factor_t eFFT_window_corr_factor)
+esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_wind_corr_factor_t eFFT_window_corr_factor)
 {
     esp_err_t ret;
 

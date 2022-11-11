@@ -2,36 +2,38 @@
 #ifndef FFTWRAPPER_H_INCLUDED
 #define FFTWRAPPER_H_INCLUDED
 
-typedef enum{
-    ampltitude_mV,      // return result as amplitude in mV 
-    ampltitude_dB_SPL,  // return result as amplitude in dB SPL
-    power_mV,           // return result as power in mV 
-} eFFT_output_form_t;
+#include "ecep_defines.h"
 
 typedef enum {
     radix2,
     radix4,
 } eFFT_radix_type_t;
 
-typedef enum {
-    hann,
-    blackman,
-    blackman_harris,
-    blackman_nuttall,
-    nuttall,
-    flat_top,
-} eFFT_window_type_t;
+// typedef enum{
+//     ampltitude_mV,      // return result as amplitude in mV 
+//     ampltitude_dB_SPL,  // return result as amplitude in dB SPL
+//     power_mV,           // return result as power in mV 
+// } eFFT_output_form_t;
 
-typedef enum {
-    up_to_90dB_SPL,
-    up_to_120dB_SPL,
-} eFFT_hw_gain_stage_t;
+// typedef enum {
+//     hann,
+//     blackman,
+//     blackman_harris,
+//     blackman_nuttall,
+//     nuttall,
+//     flat_top,
+// } eFFT_window_type_t;
 
-typedef enum{
-    none,
-    amplitude,
-    energy,
-} eFFT_window_corr_factor_t;
+// typedef enum {
+//     up_to_90dB_SPL,
+//     up_to_120dB_SPL,
+// } eFFT_hw_gain_stage_t;
+
+// typedef enum{
+//     none,
+//     amplitude,
+//     energy,
+// } eFFT_wind_corr_factor_t;
 
 
 /**
@@ -58,7 +60,7 @@ esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type);
  * 
  * @return esp_err_t:  returns ESP_OK if sucessfull, else returns error. 
  */
-esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_window_corr_factor_t eFFT_window_corr_factor);
+esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_wind_corr_factor_t eFFT_window_corr_factor);
 
 
 /**
