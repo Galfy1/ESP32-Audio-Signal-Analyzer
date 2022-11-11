@@ -24,49 +24,56 @@ static uint8_t gs_u8_default_gpio_level = GPIO_LOW;
 static QueueHandle_t gs_xQueue_pr_cmd;
 static QueueHandle_t gs_xQueue_event;
 
-static void patient_resp_hold(sIntern_event_setup_t *pr_hold_event)
+static void send_status_event(eCMD_status_t status_type)
+{
+    sIntern_event_setup_t status_event;
+
+    status_event.id = ECEP_EVNT_COMMAND_STATUS;
+    status_event.param.status = status_type;
+
+    xQueueSend(gs_xQueue_event, &status_event, 0);
+}
+
+static void patient_resp_hold()
 {   
-    pr_hold_event->id = ECEP_EVNT_COMMAND_STATUS;
 
     if (gpio_get_level(GPIO_PR_PIN) == gs_u8_default_gpio_level)  // Can toggle GPIO if GPIO equal default value.
     {
         gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN));  // Toggle gpio 
         
         ESP_LOGI(PATIENT_RESP_TAG, "Butten's being hold!");
-        pr_hold_event->param.status = ECEP_SUCCESS;
+        send_status_event(ECEP_SUCCESS);
     }
     else
     {   
         ESP_LOGE(PATIENT_RESP_TAG, "Patient response button is already active.");
-        pr_hold_event->param.status = ECEP_FAIL;
+        send_status_event(ECEP_FAIL);
     }
 }
 
-static void patient_resp_release(sIntern_event_setup_t *pr_release_event)
+static void patient_resp_release()
 {   
-    pr_release_event->id = ECEP_EVNT_COMMAND_STATUS;
 
     if (gpio_get_level(GPIO_PR_PIN) != gs_u8_default_gpio_level) // Can toggle GPIO if GPIO do not equal default value.
     {
         gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN)); // Toggle gpio 
 
         ESP_LOGI(PATIENT_RESP_TAG, "Butten released!");
-        pr_release_event->param.status = ECEP_SUCCESS;
+        send_status_event(ECEP_SUCCESS);
     }
     else
     {
         ESP_LOGE(PATIENT_RESP_TAG, "Patient response button is already inactive.");
-        pr_release_event->param.status = ECEP_FAIL;
+        send_status_event(ECEP_FAIL);
     }
 }
 
-static void patient_resp_press(uint32_t press_time, sIntern_event_setup_t *pr_press_event)
+static void patient_resp_press(uint32_t press_time)
 {
-    pr_press_event->id = ECEP_EVNT_COMMAND_STATUS;
 
     if (gpio_get_level(GPIO_PR_PIN) == gs_u8_default_gpio_level)
     {
-        if ((press_time > (MIN_PRESS_DUR - 1)) && (press_time < (MAX_PRESS_DUR + 1))) 
+        if ((press_time >= MIN_PRESS_DUR) && (press_time <= MAX_PRESS_DUR)) 
         {
             ESP_LOGI(PATIENT_RESP_TAG, "Butten's being pressed for %i ms", (int) press_time);
 
@@ -75,25 +82,27 @@ static void patient_resp_press(uint32_t press_time, sIntern_event_setup_t *pr_pr
             gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN));    
 
             ESP_LOGI(PATIENT_RESP_TAG, "Butten released");
-            pr_press_event->param.status = ECEP_SUCCESS;
+            send_status_event(ECEP_SUCCESS);
+
 
         }
         else
         {
             ESP_LOGE(PATIENT_RESP_TAG, "Press time cannot be less than %ims or more than %ims", (int) MIN_PRESS_DUR, (int) MAX_PRESS_DUR);
-            pr_press_event->param.status = ECEP_ERR_INVALID_ARG;
+            send_status_event(ECEP_ERR_INVALID_ARG);
+
         }
     }
     else
     {
         ESP_LOGE(PATIENT_RESP_TAG, "Unable to perform press. Button is already active.");
-        pr_press_event->param.status = ECEP_FAIL;
+        send_status_event(ECEP_FAIL);
+        
     } 
 }
 
-static void patient_resp_click(sIntern_event_setup_t *pr_click_event)
+static void patient_resp_click()
 {   
-    pr_click_event->id = ECEP_EVNT_COMMAND_STATUS;
 
     if (gpio_get_level(GPIO_PR_PIN) == gs_u8_default_gpio_level)
     {
@@ -102,52 +111,56 @@ static void patient_resp_click(sIntern_event_setup_t *pr_click_event)
         gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN));
 
         ESP_LOGI(PATIENT_RESP_TAG, "Butten clicked");
-        pr_click_event->param.status = ECEP_SUCCESS;
+        send_status_event(ECEP_SUCCESS);
     }
     else
     {
         ESP_LOGE(PATIENT_RESP_TAG, "Unable to perform click. Button is already active.");
-        pr_click_event->param.status = ECEP_FAIL;
+        send_status_event(ECEP_FAIL);
     }
 }
 
-static void patient_resp_cdl(sIntern_event_setup_t *pr_cld_event) // Change default gpio level (cdl). If high --> low, if low --> high.
+static void patient_resp_cdl() // Change default gpio level (cdl). If high --> low, if low --> high.
 {   
-    pr_cld_event->id = ECEP_EVNT_COMMAND_STATUS;
     if (gpio_get_level(GPIO_PR_PIN) == gs_u8_default_gpio_level)
     {   
         gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN));
         gs_u8_default_gpio_level = !gs_u8_default_gpio_level;
 
         ESP_LOGI(PATIENT_RESP_TAG, "Default level of button gpio changed to %i", gpio_get_level(GPIO_PR_PIN));
-        pr_cld_event->param.status = ECEP_SUCCESS;
+        send_status_event(ECEP_SUCCESS);
     }
     else
     {
         ESP_LOGE(PATIENT_RESP_TAG, "Unable to change default state as long as button is in use.");
-        pr_cld_event->param.status = ECEP_FAIL;
+        send_status_event(ECEP_FAIL);
     }
     
 }
 
-static void patient_resp_fetch_def_state(sIntern_event_setup_t *pr_def_state_event)
+static void patient_resp_fetch_def_state()
 {   
     ESP_LOGI(PATIENT_RESP_TAG, "default gpio level: %i", (int) gs_u8_default_gpio_level);
 
+    sIntern_event_setup_t pr_def_state_event;
+
     if(gs_u8_default_gpio_level == GPIO_HIGH)
     {
-        pr_def_state_event->id = ECEP_EVNT_PR_DEF_STATE;
-        pr_def_state_event->param.pr_default = norm_closed;
+        pr_def_state_event.id = ECEP_EVNT_PR_DEF_STATE;
+        pr_def_state_event.param.pr_default = norm_closed;
+        send_status_event(ECEP_SUCCESS);
+        xQueueSend(gs_xQueue_event, &pr_def_state_event, 0);
     }
     else if (gs_u8_default_gpio_level == GPIO_LOW)
     {
-        pr_def_state_event->id = ECEP_EVNT_PR_DEF_STATE;
-        pr_def_state_event->param.pr_default = norm_open;
+        pr_def_state_event.id = ECEP_EVNT_PR_DEF_STATE;
+        pr_def_state_event.param.pr_default = norm_open;
+        send_status_event(ECEP_SUCCESS);
+        xQueueSend(gs_xQueue_event, &pr_def_state_event, 0);
     }
     else
-    {
-        pr_def_state_event->id = ECEP_EVNT_COMMAND_STATUS;
-        pr_def_state_event->param.status = ECEP_ERR_UNKNOWN;
+    {   
+        send_status_event(ECEP_ERR_UNKNOWN);
     }
 }
 
@@ -176,37 +189,39 @@ void patient_resp_task()
             switch (user_command.id)
             {
             case ECEP_CMD_TRIG_PR_CLICK:
-                patient_resp_click(&pr_event);
+                patient_resp_click();
                 break;
             
             case ECEP_CMD_TRIG_PR_HOLD:
-                patient_resp_hold(&pr_event);
+                patient_resp_hold();
                 break;
 
             case ECEP_CMD_TRIG_PR_RELEASE:
-                patient_resp_release(&pr_event);
+                patient_resp_release();
                 break;
 
             case ECEP_CMD_TRIG_PR_PRESS:
-                patient_resp_press(user_command.param.time, &pr_event);
+                patient_resp_press(user_command.param.time);
                 break;
 
             case ECEP_CMD_TOG_PR_DEF_STATE:
-                patient_resp_cdl(&pr_event);
+                patient_resp_cdl();
                 break;
             
             case ECEP_CMD_FETCH_PR_DEF_STATE:
-                patient_resp_fetch_def_state(&pr_event);
+                patient_resp_fetch_def_state();
                 break;
                 
             default:
                 pr_event.id = ECEP_EVNT_COMMAND_STATUS;
                 pr_event.param.status = ECEP_ERR_IVALID_CMD;
+                xQueueSend(gs_xQueue_event, &pr_event, 0);
                 ESP_LOGE(PATIENT_RESP_TAG, "Invalid command id %i passed to patient response task", (int) user_command.id);
+                
                 break;
             }
 
-            xQueueSend(gs_xQueue_event, &pr_event, 0);        
+            
         }
 
         vTaskDelay(100 / portTICK_PERIOD_MS);
