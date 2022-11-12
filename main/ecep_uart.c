@@ -31,6 +31,8 @@ static const char *TAG = "ecep_uart.c";
 static QueueHandle_t ecep_uart_queue;     // Queue for uart api
 static QueueHandle_t ecep_data_len_que;   // Queue used to syncronize ecep_packet_handler_task() from ecep_uart_event_task()
 
+static QueueHandle_t gs_xQueue_ecep_events; // Queue for ECEP events 
+
 static uint8_t gs_au8_raw_uart_shr[UART_RD_BUF_SIZE];  // Raw uart read data (shared memory)
 static SemaphoreHandle_t gs_raw_uart_shr_mem_sem;
 
@@ -39,10 +41,10 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t * u8_params_an
 
     
 
-    for(int32_t i = 0; i < u8_params_and_bulk_len ; i++)
-    {
-        ESP_LOGI(TAG, "0x%04x", u8_params_and_bulk[i]);
-    }
+    // for(int32_t i = 0; i < u8_params_and_bulk_len ; i++)
+    // {
+    //     ESP_LOGI(TAG, "0x%04x", u8_params_and_bulk[i]);
+    // }
 
 
 
@@ -51,10 +53,10 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t * u8_params_an
         case ECEP_CMD_FETCH_FFT:
             break;
         
-        case 0x08:
-            ESP_LOGI(TAG, "Pizza lets goo");
+        // case 0x08:
+        //     ESP_LOGI(TAG, "Pizza lets goo");
 
-            break;
+        //     break;
 
         // MANGLER EN MASSE
         default:
@@ -303,6 +305,15 @@ static void baud_error_test(int32_t i32_uart_num ,int32_t i32_baud)
 
 void ecep_uart_init()
 {
+    // Create ECEP event queue:
+    /* The programmer is expected to use the "Convenience functions" at the bottom of this file to access the event queue from throughout the application.
+        If the programmer instead want to access the event queue directly: create this event queue in main.c instead and pass it to the relevant files. */
+    gs_xQueue_ecep_events = xQueueCreate(10, sizeof(sIntern_event_setup_t));
+    if (gs_xQueue_ecep_events == NULL)
+    {
+        ESP_LOGE(TAG, "ERROR: while creating gs_xQueue_ecep_events");
+    }
+
     // ECEP UART config:
     uart_config_t ecep_uart_config = {
         .baud_rate = ECEP_UART_CFG_BAUD,
@@ -335,10 +346,41 @@ void ecep_uart_init()
     {
         ESP_LOGE(TAG, "ERROR: while creating ecep_data_len_que queue");
     }
-
-
 }
 
+
+
+
+// ----------------------- Convenience functions for accessing the ecep event queue -----------------------
+
+// Send ECEP_EVNT_COMMAND_STATUS event:
+void send_ecep_evnt_cmd_status(eCMD_status_t status_type, uint8_t u8_cmd_id)
+{
+    sIntern_event_setup_t event;
+
+    event.u8_id = ECEP_EVNT_COMMAND_STATUS;
+    event.param.status_event.u8_parent_cmd_id = u8_cmd_id;
+    event.param.status_event.status = status_type;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_status_event(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_PR_DEF_STATE event:
+void send_ecep_evnt_pr_def_state(eRelay_state_t default_relay_state)
+{
+    sIntern_event_setup_t event;
+
+    event.u8_id = ECEP_EVNT_PR_DEF_STATE;
+    event.param.pr_default = default_relay_state;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_pr_def_state(). Event queue is full"); 
+    }
+}
 
 
 

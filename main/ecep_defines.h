@@ -13,7 +13,8 @@
                                                                              (*4 because bulk raw adc data is stored as floats. The L/R ADC Raw data event has no param struct size to account for)  */
 #define ECEP_PACKET_TYPE 0x42
 
-// ALLE DE ID HER SKAL VÆRE HEX IKKE DECIMAL:
+
+// ---------------------------- Command/Event IDs  ----------------------------
 
 // Command IDs  
 #define ECEP_CMD_FETCH_FFT                  0x01
@@ -50,9 +51,13 @@
 #define ECEP_EVNT_PONG                      0x0B
 
 
+
+
+// ------------------------- Params (enums and structs)  -------------------------
+
 // DE SKAL MÅSKE HAVE ECEP PREFIX FORAN SIG:
 
-// parameter enums (for both commands and events)
+// Parameter enums (for both commands and events)
 typedef enum{
     right = 1,
     left = 2,
@@ -100,9 +105,7 @@ typedef enum{
     ECEP_errorcode3 = 7,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!
 } eCMD_status_t;
 
-
-// Parameter structs (for both commands and events)
-
+// Parameter structs (for both commands and events):
 typedef struct{
 
     eFFT_output_form_t fft_output_format;
@@ -119,34 +122,32 @@ typedef struct{
 
 } sStatus_event_t;
 
-// Paramter union
-typedef union uCommand_parameters{
 
+
+
+// ---------------- Unions/Structs used for Internal task communication ----------------
+
+typedef union uCommand_parameters{
     eAudio_channel_t channel;                   
     eFFT_output_form_t fft_output_format;     
     eFFT_window_type_t fft_window;      
     uint32_t u32_fft_res_avg_count;
     eFFT_wind_corr_factor_t fft_win_corr_factor;                 
     eFFT_hw_gain_stage_t range;       
-    uint32_t u32_time;
-                 
+    uint32_t u32_time;            
 } uCMD_params_t;
 
-
 typedef union uEvent_parameters{
-
-    sStatus_event_t status_event;
+    sStatus_event_t status_event;    // Burde den ikke hedde command status? Det er vel underforstået at det er et event siden den ligger i en EVNT_param union. (også så den matcher event ID navnet)
     sFFT_stgs_t FFT_stgs;
     uint32_t u32_time;
     uint32_t u32_cen_freq_hz;
     uint32_t u32_cen_freq_amp;
-    eFFT_hw_gain_stage_t range;   
+    eFFT_hw_gain_stage_t range;   // Måske hedde mic_range i stedet? 
     eRelay_state_t pr_default;  
-
 } uEVNT_params_t;
 
-
-// Command and event structs for internal task communication.
+// Command/Event structs used as elements for the command/event queues:
 typedef struct{
 
     uint8_t u8_id;
