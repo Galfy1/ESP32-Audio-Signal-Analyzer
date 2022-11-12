@@ -13,8 +13,8 @@
 #include "adc.h"
 #include "dsp.h"
 #include "ecep_uart.h"
-#include "patient_response.h"
 #include "ecep_defines.h"
+#include "patient_response.h"
 
 static const char *TAG = "main.c";
 
@@ -35,9 +35,9 @@ void app_main(void)
 {    
     TaskHandle_t dsp_left_task_handle;
     TaskHandle_t dsp_right_task_handle;
-
-    QueueHandle_t xQueue_pr_cmd;
-    QueueHandle_t xQueue_event;
+      
+    QueueHandle_t xQueue_pr_ecep_cmds;        // Queue for ECEP commands for patient_resp_task  
+    QueueHandle_t xQueue_dsp_ecep_cmds;  // Queue for ECEP commands for dsp_ecep_handler_task()
     
     ESP_LOGI(TAG, "DET VIRKER :D");
 
@@ -72,9 +72,9 @@ void app_main(void)
     }
     
     // Create queues:
-    xQueue_pr_cmd = xQueueCreate(10, sizeof(sIntern_command_setup_t));
-    xQueue_event = xQueueCreate(10, sizeof(sIntern_event_setup_t));
-    if ((xQueue_pr_cmd == NULL) || (xQueue_event == NULL))
+    xQueue_pr_ecep_cmds = xQueueCreate(10, sizeof(sIntern_command_setup_t));
+    xQueue_dsp_ecep_cmds = xQueueCreate(10, sizeof(sIntern_command_setup_t));
+    if ((xQueue_pr_ecep_cmds == NULL) || (xQueue_dsp_ecep_cmds == NULL))
     {
         ESP_LOGE(TAG, "ERROR: while creating one or more queues");
     }
@@ -94,18 +94,17 @@ void app_main(void)
         pf32_L_fft_res_shr,
         pf32_R_fft_res_shr,
         fft_L_res_shr_mem_sem,
-        fft_R_res_shr_mem_sem);
+        fft_R_res_shr_mem_sem,
+        xQueue_dsp_ecep_cmds);
 
-    patient_resp_init(
-        xQueue_pr_cmd,
-        xQueue_event);
+    patient_resp_init(xQueue_pr_ecep_cmds);
 
-    //ecep_uart_init();
-/*
-*/
+    ecep_uart_init();
+
     // Create tasks:
     // FIND LIGE UD AF MED DE PRIORITETER HER... ADCEN tasken skal nok have højeste priroritet! 
     // HAR SAT dsp_left_ch_task og dsp_right_ch_task TIL BEGGE AT KØRE OP CORE 1 TIL AT STARTE MED. MEN DEN ENE SKAL OVER PÅ CORE 2 PÅ ET TIDSPUNKT
+    // MÅSKE GØR STACK SIZEN MINDRE PÅ DE SMÅ TASKS DER IKKE BEHØVER SÅ MEGET STACK PLADS
 
     // Create tasks (order is important)
     xTaskCreatePinnedToCore(dsp_left_ch_task, "dsp_left_task", 4096, NULL, 4, &dsp_left_task_handle, 1); // Use core 1 
@@ -115,8 +114,8 @@ void app_main(void)
     xTaskCreatePinnedToCore(adc_task, "adc_task", 4096, NULL, 8, NULL, 1); // Use core 1 . ADC task needs the higher priority compared to other tasks
     // xTaskCreatePinnedToCore(dummy_task, "dummy_task", 4096, NULL, 4, NULL, 1); // Use core 1. 
     xTaskCreatePinnedToCore(patient_resp_task, "patient_resp_task", 4096, NULL, 4, NULL, 1); // Use core 1.     
-    // xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
-    // xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 4096, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 8192, NULL, 4, NULL, 1);  // (Requires a stack size a bit larger than 4096 to not overflow it)
 
 
     // Amount of PSRAM left:

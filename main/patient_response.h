@@ -6,7 +6,7 @@
 void dummy_task();
 
 void patient_resp_task();
-void patient_resp_init(QueueHandle_t xQueue_pr_cmd, QueueHandle_t xQueue_event);
+void patient_resp_init(QueueHandle_t xQueue_pr_ecep_cmds);
 
 
 #endif /*PATIENT_RESPONSE_H_INCLUDED */

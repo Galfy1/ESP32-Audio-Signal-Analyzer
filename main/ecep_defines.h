@@ -1,16 +1,20 @@
-
-
 #ifndef ECEP_DEFINES_H_INCLUDED
 #define ECEP_DEFINES_H_INCLUDED
 
+#include "common_defines.h"
 
-#define ECEP_HEADER_SIZE        4  // In bytes
-#define ECEP_MAX_PACKAGE_SIZE   ECEP_HEADER_SIZE + (4*UART_RD_BUF_SIZE)   // Max package size in bytes.
-                                                                          // (chosen by biggest command or event. In this case: Left/Right FFT Result event)
+#define ECEP_HEADER_LEN       4                                       // Header length In bytes
 
-                                                                          // HOV er det smart at have en define fra common_defines her inde??   
-                                                                          // Og hvis R/L FFT result har en param struct, skal dens størrelse også lige tilføjes
-#define ECEP_PACKET_TYPE 42
+#define ECEP_MAX_CMD_PACKET_LEN 1000                                        // Max packet length for an event packet in bytes. 
+                                                                            /* (value is arbitrarily chosen. Is simply has to be at least the size of the largest command package.
+                                                                               No command package is currently over 1000 bytes in size.) */
+#define ECEP_MAX_EVNT_PACKET_LEN  ECEP_HEADER_LEN + (4*DATA_BLOCK_SIZE)   // Max packet length for an event packet in bytes.
+                                                                           /* (chosen by biggest Event. In this case: Left/Right ADC Raw data event)
+                                                                             (*4 because bulk raw adc data is stored as floats. The L/R ADC Raw data event has no param struct size to account for)  */
+#define ECEP_PACKET_TYPE 0x42
+
+
+// ---------------------------- Command/Event IDs  ----------------------------
 
 // Command IDs  
 #define ECEP_CMD_FETCH_FFT                  0x01
@@ -48,7 +52,12 @@
 
 
 
-// parameter enums (for both commands and events)
+
+// ------------------------- Params (enums and structs)  -------------------------
+
+// DE SKAL MÅSKE HAVE ECEP PREFIX FORAN SIG:
+
+// Parameter enums (for both commands and events)
 typedef enum{
     right = 1,
     left = 2,
@@ -89,16 +98,14 @@ typedef enum{
 typedef enum{
     ECEP_SUCCESS = 1,
     ECEP_FAIL = 2,
-    ECEP_ERR_INVALID_ARG = 3,
-    ECEP_ERR_IVALID_CMD = 4,
+    ECEP_ERR_INVALID_PARAM = 3,
+    ECEP_ERR_INVALID_CMD = 4,
     ECEP_ERR_UNKNOWN = 5,
     ECEP_errorcode2 = 6,
     ECEP_errorcode3 = 7,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!
 } eCMD_status_t;
 
-
-// Parameter structs (for both commands and events)
-
+// Parameter structs (for both commands and events):
 typedef struct{
 
     eFFT_output_form_t fft_output_format;
@@ -115,34 +122,32 @@ typedef struct{
 
 } sStatus_event_t;
 
-// Paramter union
-typedef union uCommand_parameters{
 
+
+
+// ---------------- Unions/Structs used for Internal task communication ----------------
+
+typedef union uCommand_parameters{
     eAudio_channel_t channel;                   
     eFFT_output_form_t fft_output_format;     
     eFFT_window_type_t fft_window;      
     uint32_t u32_fft_res_avg_count;
     eFFT_wind_corr_factor_t fft_win_corr_factor;                 
     eFFT_hw_gain_stage_t range;       
-    uint32_t u32_time;
-                 
+    uint32_t u32_time;            
 } uCMD_params_t;
 
-
 typedef union uEvent_parameters{
-
-    sStatus_event_t status_event;
+    sStatus_event_t status_event;    // Burde den ikke hedde command status? Det er vel underforstået at det er et event siden den ligger i en EVNT_param union. (også så den matcher event ID navnet)
     sFFT_stgs_t FFT_stgs;
     uint32_t u32_time;
     uint32_t u32_cen_freq_hz;
     uint32_t u32_cen_freq_amp;
-    eFFT_hw_gain_stage_t range;   
+    eFFT_hw_gain_stage_t range;   // Måske hedde mic_range i stedet? 
     eRelay_state_t pr_default;  
-
 } uEVNT_params_t;
 
-
-// Command and event structs for internal task communication.
+// Command/Event structs used as elements for the command/event queues:
 typedef struct{
 
     uint8_t u8_id;

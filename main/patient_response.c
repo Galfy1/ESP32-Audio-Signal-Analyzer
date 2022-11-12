@@ -8,6 +8,7 @@
 #include "driver/gpio.h"
 
 #include "patient_response.h"
+#include "ecep_uart.h" // For convenience functions used to access the ecep event queue
 #include "common_defines.h"
 #include "ecep_defines.h"
 
@@ -21,19 +22,7 @@ static const char *PATIENT_RESP_TAG = "patient_response.c";
 
 static uint8_t gs_u8_default_gpio_level = GPIO_LOW;
 
-static QueueHandle_t gs_xQueue_pr_cmd;
-static QueueHandle_t gs_xQueue_event;
-
-static void send_status_event(eCMD_status_t status_type, uint8_t u8_cmd_id)
-{
-    sIntern_event_setup_t event;
-
-    event.u8_id = ECEP_EVNT_COMMAND_STATUS;
-    event.param.status_event.u8_parent_cmd_id = u8_cmd_id;
-    event.param.status_event.status = status_type;
-
-    xQueueSend(gs_xQueue_event, &event, 0);
-}
+static QueueHandle_t gs_xQueue_pr_ecep_cmds;
 
 static void patient_resp_hold()
 {   
@@ -43,12 +32,12 @@ static void patient_resp_hold()
         gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN));  // Toggle gpio 
         
         ESP_LOGI(PATIENT_RESP_TAG, "Butten's being hold!");
-        send_status_event(ECEP_SUCCESS, ECEP_CMD_TRIG_PR_HOLD);
+        send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_TRIG_PR_HOLD);
     }
     else
     {   
         ESP_LOGE(PATIENT_RESP_TAG, "Patient response button is already active.");
-        send_status_event(ECEP_FAIL, ECEP_CMD_TRIG_PR_HOLD);
+        send_ecep_evnt_cmd_status(ECEP_FAIL, ECEP_CMD_TRIG_PR_HOLD);
     }
 }
 
@@ -60,12 +49,12 @@ static void patient_resp_release()
         gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN)); // Toggle gpio 
 
         ESP_LOGI(PATIENT_RESP_TAG, "Butten released!");
-        send_status_event(ECEP_SUCCESS, ECEP_CMD_TRIG_PR_RELEASE);
+        send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_TRIG_PR_RELEASE);
     }
     else
     {
         ESP_LOGE(PATIENT_RESP_TAG, "Patient response button is already inactive.");
-        send_status_event(ECEP_FAIL, ECEP_CMD_TRIG_PR_RELEASE);
+        send_ecep_evnt_cmd_status(ECEP_FAIL, ECEP_CMD_TRIG_PR_RELEASE);
     }
 }
 
@@ -83,21 +72,21 @@ static void patient_resp_press(uint32_t press_time)
             gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN));    
 
             ESP_LOGI(PATIENT_RESP_TAG, "Butten released");
-            send_status_event(ECEP_SUCCESS, ECEP_CMD_TRIG_PR_PRESS);
+            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_TRIG_PR_PRESS);
 
 
         }
         else
         {
             ESP_LOGE(PATIENT_RESP_TAG, "Press time cannot be less than %ims or more than %ims", (int) MIN_PRESS_DUR, (int) MAX_PRESS_DUR);
-            send_status_event(ECEP_ERR_INVALID_ARG, ECEP_CMD_TRIG_PR_PRESS);
+            send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_TRIG_PR_PRESS);
 
         }
     }
     else
     {
         ESP_LOGE(PATIENT_RESP_TAG, "Unable to perform press. Button is already active.");
-        send_status_event(ECEP_FAIL, ECEP_CMD_TRIG_PR_PRESS);
+        send_ecep_evnt_cmd_status(ECEP_FAIL, ECEP_CMD_TRIG_PR_PRESS);
         
     } 
 }
@@ -112,12 +101,12 @@ static void patient_resp_click()
         gpio_set_level(GPIO_PR_PIN, !gpio_get_level(GPIO_PR_PIN));
 
         ESP_LOGI(PATIENT_RESP_TAG, "Butten clicked");
-        send_status_event(ECEP_SUCCESS, ECEP_CMD_TRIG_PR_CLICK);
+        send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_TRIG_PR_CLICK);
     }
     else
     {
         ESP_LOGE(PATIENT_RESP_TAG, "Unable to perform click. Button is already active.");
-        send_status_event(ECEP_FAIL, ECEP_CMD_TRIG_PR_CLICK);
+        send_ecep_evnt_cmd_status(ECEP_FAIL, ECEP_CMD_TRIG_PR_CLICK);
     }
 }
 
@@ -129,12 +118,12 @@ static void patient_resp_cdl() // Change default gpio level (cdl). If high --> l
         gs_u8_default_gpio_level = !gs_u8_default_gpio_level;
 
         ESP_LOGI(PATIENT_RESP_TAG, "Default level of button gpio changed to %i", gpio_get_level(GPIO_PR_PIN));
-        send_status_event(ECEP_SUCCESS, ECEP_CMD_TOG_PR_DEF_STATE);
+        send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_TOG_PR_DEF_STATE);
     }
     else
     {
         ESP_LOGE(PATIENT_RESP_TAG, "Unable to change default state as long as button is in use.");
-        send_status_event(ECEP_FAIL, ECEP_CMD_TOG_PR_DEF_STATE);
+        send_ecep_evnt_cmd_status(ECEP_FAIL, ECEP_CMD_TOG_PR_DEF_STATE);
     }
     
 }
@@ -147,21 +136,17 @@ static void patient_resp_fetch_def_state()
 
     if(gs_u8_default_gpio_level == GPIO_HIGH)
     {
-        pr_def_state_event.u8_id = ECEP_EVNT_PR_DEF_STATE;
-        pr_def_state_event.param.pr_default = norm_closed;
-        send_status_event(ECEP_SUCCESS, ECEP_CMD_FETCH_PR_DEF_STATE);
-        xQueueSend(gs_xQueue_event, &pr_def_state_event, 0);
+        send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_PR_DEF_STATE);
+        send_ecep_evnt_pr_def_state(norm_closed);
     }
     else if (gs_u8_default_gpio_level == GPIO_LOW)
     {
-        pr_def_state_event.u8_id = ECEP_EVNT_PR_DEF_STATE;
-        pr_def_state_event.param.pr_default = norm_open;
-        send_status_event(ECEP_SUCCESS, ECEP_CMD_FETCH_PR_DEF_STATE);
-        xQueueSend(gs_xQueue_event, &pr_def_state_event, 0);
+        send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_PR_DEF_STATE);
+        send_ecep_evnt_pr_def_state(norm_open);
     }
     else
     {   
-        send_status_event(ECEP_ERR_UNKNOWN, ECEP_CMD_FETCH_PR_DEF_STATE);
+        send_ecep_evnt_cmd_status(ECEP_ERR_UNKNOWN, ECEP_CMD_FETCH_PR_DEF_STATE);
     }
 }
 
@@ -184,7 +169,7 @@ void patient_resp_task()
 
     while(1)
     {
-        if( xQueueReceive(gs_xQueue_pr_cmd, &user_command, 0) == pdTRUE)
+        if( xQueueReceive(gs_xQueue_pr_ecep_cmds, &user_command, 0) == pdTRUE)
         {
             switch (user_command.u8_id)
             {
@@ -213,7 +198,7 @@ void patient_resp_task()
                 break;
                 
             default:
-                send_status_event(ECEP_ERR_IVALID_CMD, user_command.u8_id);
+                send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_CMD, user_command.u8_id);
                 ESP_LOGE(PATIENT_RESP_TAG, "Invalid command id %i passed to patient response task", (int) user_command.u8_id);
                 
                 break;
@@ -227,10 +212,9 @@ void patient_resp_task()
 }
 
 
-void patient_resp_init(QueueHandle_t xQueue_pr_cmd, QueueHandle_t xQueue_event)
+void patient_resp_init(QueueHandle_t xQueue_pr_ecep_cmds)
 {
-    gs_xQueue_pr_cmd = xQueue_pr_cmd;
-    gs_xQueue_event = xQueue_event;
+    gs_xQueue_pr_ecep_cmds = xQueue_pr_ecep_cmds;
 }
 
 // static const char *DUMMY_TASK = "Dummy_task";
@@ -251,21 +235,21 @@ void patient_resp_init(QueueHandle_t xQueue_pr_cmd, QueueHandle_t xQueue_event)
 //     vTaskDelay(4000 / portTICK_PERIOD_MS);
 
 //     cmd_send.u8_id = ECEP_CMD_TOG_PR_DEF_STATE;
-//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     xQueueSend(gs_xQueue_pr_ecep_cmds, &cmd_send, 0);
 //     cmd_send.u8_id = ECEP_CMD_FETCH_PR_DEF_STATE;
-//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     xQueueSend(gs_xQueue_pr_ecep_cmds, &cmd_send, 0);
 //     cmd_send.u8_id = ECEP_CMD_TRIG_PR_HOLD;
-//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     xQueueSend(gs_xQueue_pr_ecep_cmds, &cmd_send, 0);
 //     cmd_send.u8_id = ECEP_CMD_TOG_PR_DEF_STATE;
-//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     xQueueSend(gs_xQueue_pr_ecep_cmds, &cmd_send, 0);
 //     cmd_send.u8_id = ECEP_CMD_FETCH_PR_DEF_STATE;
-//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     xQueueSend(gs_xQueue_pr_ecep_cmds, &cmd_send, 0);
 //     cmd_send.u8_id = ECEP_CMD_TRIG_PR_RELEASE;
-//     xQueueSend(gs_xQueue_pr_cmd, &cmd_send, 0);
+//     xQueueSend(gs_xQueue_pr_ecep_cmds, &cmd_send, 0);
 
 //     while(1)
 //     {
-//         if( xQueueReceive(gs_xQueue_event, &esp_event, 0) == pdTRUE)
+//         if( xQueueReceive(gs_xQueue_ecep_events, &esp_event, 0) == pdTRUE)
 //         {
 //             if (esp_event.u8_id == ECEP_EVNT_PR_DEF_STATE){
 //                 if(esp_event.param.pr_default == norm_closed){
@@ -282,8 +266,8 @@ void patient_resp_init(QueueHandle_t xQueue_pr_cmd, QueueHandle_t xQueue_event)
 //                 else if(esp_event.param.status_event.status == ECEP_FAIL){
 //                     ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_FAIL", esp_event.u8_id);
 //                 }
-//                 else if(esp_event.param.status_event.status == ECEP_ERR_INVALID_ARG){
-//                     ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_ERR_INVALID_ARG", esp_event.u8_id);
+//                 else if(esp_event.param.status_event.status == ECEP_ERR_INVALID_PARAM){
+//                     ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_ERR_INVALID_PARAM", esp_event.u8_id);
 //                 }
 //                 else if(esp_event.param.status_event.status == ECEP_ERR_UNKNOWN){
 //                     ESP_LOGI(DUMMY_TASK, "Command id: %i - ECEP_ERR_UNKNOWN", esp_event.u8_id);
