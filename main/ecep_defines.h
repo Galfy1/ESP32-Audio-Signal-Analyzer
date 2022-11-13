@@ -45,10 +45,13 @@
 #define ECEP_EVNT_FFT_TOT_DUR               0x05
 #define ECEP_EVNT_LEFT_ADC_RAW              0x06
 #define ECEP_EVNT_RIGHT_ADC_RAW             0x07
-#define ECEP_EVNT_CEN_FREQ                  0x08
-#define ECEP_EVNT_CEN_FREQ_AMP              0x09
-#define ECEP_EVNT_PR_DEF_STATE              0x0A
-#define ECEP_EVNT_PONG                      0x0B
+#define ECEP_EVNT_LEFT_CEN_FREQ             0x08   
+#define ECEP_EVNT_RIGHT_CEN_FREQ            0x09   
+#define ECEP_EVNT_LEFT_CEN_FREQ_AMP         0x0A  
+#define ECEP_EVNT_RIGHT_CEN_FREQ_AMP        0x0B  
+#define ECEP_EVNT_MIC_RANGE                 0x0C
+#define ECEP_EVNT_PR_DEF_STATE              0x0D
+#define ECEP_EVNT_PONG                      0x0E
 
 
 
@@ -88,7 +91,7 @@ typedef enum{
 typedef enum {
     up_to_90dB_SPL = 1,
     up_to_120dB_SPL = 2,
-} eFFT_hw_gain_stage_t;
+} eFFT_hw_gain_stage_t;  // Skal måske ikke hede FFT_ foran, hvis den ikke er en del af FFT settings.
 
 typedef enum{
     norm_open = 1,
@@ -133,16 +136,16 @@ typedef union uCommand_parameters{
     eFFT_window_type_t fft_window;      
     uint32_t u32_fft_res_avg_count;
     eFFT_wind_corr_factor_t fft_win_corr_factor;                 
-    eFFT_hw_gain_stage_t range;       
-    uint32_t u32_time;            
+    eFFT_hw_gain_stage_t range;   // Måske hedde mic_range i stedet?     
+    uint32_t u32_time;            // Skal måske hedde fft duration eller noget lignene, så man kan se den hører til ECEP_EVNT_FFT_TOT_DUR
 } uCMD_params_t;
 
 typedef union uEvent_parameters{
     sStatus_event_t status_event;    // Burde den ikke hedde command status? Det er vel underforstået at det er et event siden den ligger i en EVNT_param union. (også så den matcher event ID navnet)
     sFFT_stgs_t FFT_stgs;
-    uint32_t u32_time;
+    uint32_t u32_time;             // Skal måske hedde fft duration eller noget lignene, så man kan se den hører til ECEP_EVNT_FFT_TOT_DUR
     uint32_t u32_cen_freq_hz;
-    uint32_t u32_cen_freq_amp;
+    float f32_cen_freq_amp;     
     eFFT_hw_gain_stage_t range;   // Måske hedde mic_range i stedet? 
     eRelay_state_t pr_default;  
 } uEVNT_params_t;

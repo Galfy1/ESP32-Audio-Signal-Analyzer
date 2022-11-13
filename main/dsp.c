@@ -30,10 +30,10 @@ static const char *DSP_TAG = "DSP.C";
 eFFT_output_form_t   gs_fft_out_format       = DFLT_FFT_OUTPUT_FORMAT;
 eFFT_window_type_t   gs_window_used          = DFLT_WIND_USED;
 int32_t              gs_i32_fft_avg_max_cnt  = DFLT_FFT_AVG_MAX_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
-eFFT_hw_gain_stage_t gs_hw_gain_stage      = DFLT_HW_GAIN_STAGE;
 eFFT_wind_corr_factor_t gs_wind_corr_factor = DFLT_WIND_CORR_FACTOR;
+eFFT_hw_gain_stage_t gs_hw_gain_stage      = DFLT_HW_GAIN_STAGE;
 
-float gs_f32_total_fft_dur_ms;  // The total duration of the averaged FFT result in ms
+uint32_t gs_u32_total_fft_dur_ms;  // The total duration of the averaged FFT result in ms
 
 static float * gs_pf32_adc1_shared;
 static float * gs_pf32_adc2_shared;
@@ -56,28 +56,21 @@ __attribute__((aligned(16)))
 static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};  
 
 // Stores the latest center frequency indexes and values:
-static int32_t gs_i32_L_cent_freq_idx;
-static float   gs_f32_L_cent_freq_val;
-static int32_t gs_i32_R_cent_freq_idx;
-static float   gs_f32_R_cent_freq_val;
+static uint32_t gs_u32_L_cent_freq_hz;
+static uint32_t gs_u32_R_cent_freq_hz;
+static float    gs_f32_L_cent_freq_val;
+static float    gs_f32_R_cent_freq_val;
 
 // For Spectral Estimation: Welch's method is used with 0% overlap 
 
 // IKKE TESTET:
 static void calc_fft_duration_ms()
 {
-    gs_f32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * 1000.0 * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt;
+    gs_u32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt * 1000.0; // *1000 to get in ms
 }
 
-/**
- * @brief 
- * 
- * @param[in] array 
- * @param[in] array_size 
- * @param[out] p_cent_freq_idx 
- * @param[out] p_cent_freq_val 
- */
-static void find_cent_freq(float * array, int32_t array_size, int32_t * p_cent_freq_idx, float * p_cent_freq_val)
+
+static void find_cent_freq(float * array, int32_t array_size, uint32_t * p_cent_freq_hz, float * p_cent_freq_val)
 {
     float temp_val;
     float biggest_val = 0;
@@ -92,8 +85,13 @@ static void find_cent_freq(float * array, int32_t array_size, int32_t * p_cent_f
             biggest_val_index = i;
         }
     }
-    *p_cent_freq_idx = biggest_val_index;
+
     *p_cent_freq_val = biggest_val;
+    *p_cent_freq_hz = biggest_val_index * (ADC_SAMPLING_FREQ / (DATA_BLOCK_SIZE));    /*  Bin_freq = Bin_nr * (fs / N).   
+                                                                                       (DATA_BLOCK_SIZE is used instead of DATA_BLOCK_SIZE/2 even though DATA_BLOCK_SIZE/2 is the size of the FFT result.
+                                                                                        This is because the half sized FFT result is single sided and goes from 0 - fny. The Bin_nr to Bin_freq expression uses the range to fs (not fny),
+                                                                                        so we use the full DATA_BLOCK_SIZE in the expression)       
+                                                                                    */
     //ESP_LOGI(DSP_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
 }
 
@@ -143,12 +141,30 @@ void dsp_ecep_handler_task()
             switch(u8_ecep_cmd_id)
             {
                 case ECEP_CMD_FETCH_FFT: 
-                    //ASD
+                    switch(dsp_ecep_command.param.channel)
+                    {  
+                        case left:
+                            send_ecep_evnt_L_fft_res();
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT);
+                            break;
+                        case right:
+                            send_ecep_evnt_R_fft_res();
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT);
+                            break;
+                        case both:
+                            send_ecep_evnt_L_fft_res();
+                            send_ecep_evnt_R_fft_res();
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT);
+                            break;
+                        default:
+                            send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_FETCH_FFT);
+                            break;
+                    }
                     break;
 
                 case ECEP_CMD_SET_FFT_OUTP_FORM: 
+                    // Check for valid param:
                     output_form_temp = dsp_ecep_command.param.fft_output_format;
-
                     if((output_form_temp!=ampltitude_mV) && (output_form_temp!=ampltitude_dB_SPL) && (output_form_temp!=power_mV))
                     {
                         send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_FFT_OUTP_FORM);
@@ -162,8 +178,8 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_SET_FFT_WIND_TYPE: 
+                    // Check for valid param:
                     wind_type_temp = dsp_ecep_command.param.fft_window;
-
                     if((wind_type_temp!=hann) && (wind_type_temp!=blackman) && (wind_type_temp!=blackman_harris) 
                        && (wind_type_temp!=blackman_nuttall) && (wind_type_temp!=nuttall) && (wind_type_temp!=flat_top))
                     {
@@ -184,8 +200,8 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_SET_WIND_CORR_FACTOR: 
+                    // Check for valid param:
                     wind_corr_fact_temp = dsp_ecep_command.param.fft_win_corr_factor;
-
                     if((wind_corr_fact_temp != none) && (wind_corr_fact_temp != amplitude) && (wind_corr_fact_temp != energy))
                     {
                         send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_WIND_CORR_FACTOR);
@@ -199,28 +215,87 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_FETCH_FFT_STGS: 
-                    //ASD
+                    // Execute command:
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT_STGS);
+                    send_ecep_evnt_fft_stgs(gs_fft_out_format, gs_window_used, gs_i32_fft_avg_max_cnt, gs_wind_corr_factor);
                     break;
 
-                case ECEP_CMD_FETCH_FFT_TOTAL_DUR: 
-                    //ASD
+                case ECEP_CMD_FETCH_FFT_TOTAL_DUR:
+                    // Execute command: 
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT_TOTAL_DUR);
+                    send_ecep_evnt_fft_tot_dur(gs_u32_total_fft_dur_ms);
                     break;
 
                 case ECEP_CMD_FETCH_ADC_RAW_DATA: 
-                    //ASD
+                    switch(dsp_ecep_command.param.channel)
+                    {  
+                        case left:
+                            send_ecep_evnt_L_adc_raw();
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_ADC_RAW_DATA);
+                            break;
+                        case right:
+                            send_ecep_evnt_R_adc_raw();
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_ADC_RAW_DATA);
+                            break;
+                        case both:
+                            send_ecep_evnt_L_adc_raw();
+                            send_ecep_evnt_R_adc_raw();
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_ADC_RAW_DATA);
+                            break;
+                        default:
+                            send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_FETCH_ADC_RAW_DATA);
+                            break;
+                    }
                     break;
 
                 case ECEP_CMD_FETCH_CEN_FREQ: 
-                    //ASD
+                    switch(dsp_ecep_command.param.channel)
+                    {  
+                        case left:
+                            send_ecep_evnt_L_cen_freq(gs_u32_L_cent_freq_hz);
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ);
+                            break;
+                        case right:
+                            send_ecep_evnt_R_cen_freq(gs_u32_R_cent_freq_hz);
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ);
+                            break;
+                        case both:
+                            send_ecep_evnt_L_cen_freq(gs_u32_L_cent_freq_hz);
+                            send_ecep_evnt_R_cen_freq(gs_u32_R_cent_freq_hz);
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ);
+                            break;
+                        default:
+                            send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_FETCH_CEN_FREQ);
+                            break;
+                    }
                     break;
 
                 case ECEP_CMD_FETCH_CEN_FREQ_AMP: 
-                    //ASD
+                    switch(dsp_ecep_command.param.channel)
+                    {  
+                        case left:
+                            send_ecep_evnt_L_cen_freq_amp(gs_f32_L_cent_freq_val);
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ_AMP);
+                            break;
+                        case right:
+                            send_ecep_evnt_R_cen_freq_amp(gs_f32_R_cent_freq_val);
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ_AMP);
+                            break;
+                        case both:
+                            send_ecep_evnt_L_cen_freq_amp(gs_f32_L_cent_freq_val);
+                            send_ecep_evnt_R_cen_freq_amp(gs_f32_R_cent_freq_val);
+                            send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ_AMP);
+                            break;
+                        default:
+                            send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_FETCH_CEN_FREQ_AMP);
+                            break;
+                    }
+                    break;
                     break;
 
                 case ECEP_CMD_SET_MIC_RANGE: 
+                    // Check for valid param:
                     hw_gain_stage_temp = dsp_ecep_command.param.range;
-
                     if((hw_gain_stage_temp != up_to_90dB_SPL) && (hw_gain_stage_temp != up_to_120dB_SPL))
                     {
                         send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_MIC_RANGE);
@@ -234,7 +309,9 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_FETCH_MIC_RANGE: 
-                    //ASD
+                    // Execute command:
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_MIC_RANGE);
+                    send_ecep_evnt_mic_range(gs_hw_gain_stage);
                     break;
 
                 default:
@@ -304,6 +381,7 @@ void dsp_left_ch_task()
             //Remove DC-offset (DC-offset was added by our hardware. aka not a part of the original signal)
             gs_af32_adc1_temp_buf[0] = 0;
             gs_af32_adc1_temp_buf[1] = 0;
+            // TÆST OM DET ER NOK BARE AT FJERNE DE FØRSTE 2. ELLER VI ER NØDT TIL AT FJERNE FLERE
 
 
 
@@ -314,7 +392,7 @@ void dsp_left_ch_task()
             // {
             //     testy_counter = 0;
             //     //dsps_view_spectrum(gs_af32_adc1_temp_buf, DATA_BLOCK_SIZE/2, 0, 55); // for debugging
-            //     ESP_LOGI(DSP_TAG, "Center freq idx: %i" , (int) gs_i32_L_cent_freq_idx);
+            //     ESP_LOGI(DSP_TAG, "Center freq idx: %i" , (int) gs_u32_L_cent_freq_hz);
             //     ESP_LOGI(DSP_TAG, "Center freq val: %f" , gs_f32_L_cent_freq_val);
 
             //     // for(int i = DATA_BLOCK_SIZE/12 ; i < DATA_BLOCK_SIZE/6 ; i++)
@@ -352,7 +430,7 @@ void dsp_left_ch_task()
                 }
 
                 // Find center frequency:
-                find_cent_freq(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE/2, &gs_i32_L_cent_freq_idx, &gs_f32_L_cent_freq_val); // SKAL HAVE ANDRE INPUTS
+                find_cent_freq(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE/2, &gs_u32_L_cent_freq_hz, &gs_f32_L_cent_freq_val); 
 
                 // Copy FFT averaged result from local copy into shared memory:
                 if(xSemaphoreTake(gs_fft_L_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)

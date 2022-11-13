@@ -382,6 +382,154 @@ void send_ecep_evnt_pr_def_state(eRelay_state_t default_relay_state)
     }
 }
 
+// Send ECEP_EVNT_FFT_STGS event:
+void send_ecep_evnt_fft_stgs(eFFT_output_form_t fft_output_format, eFFT_window_type_t fft_window, 
+                                   uint32_t u32_fft_res_avg_count, eFFT_wind_corr_factor_t fft_corr_factor)
+{
+    sIntern_event_setup_t event;
 
+    event.u8_id = ECEP_EVNT_FFT_STGS;
+    event.param.FFT_stgs.fft_output_format = fft_output_format;
+    event.param.FFT_stgs.fft_window = fft_window;
+    event.param.FFT_stgs.u32_fft_res_avg_count = u32_fft_res_avg_count;
+    event.param.FFT_stgs.fft_corr_factor = fft_corr_factor;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_fft_stgs(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_FFT_TOT_DUR event:
+void send_ecep_evnt_fft_tot_dur(uint32_t u32_fft_total_dur_ms)
+{
+    sIntern_event_setup_t event;
+
+    event.u8_id = ECEP_EVNT_FFT_TOT_DUR;
+    event.param.u32_time = u32_fft_total_dur_ms;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_fft_tot_dur(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_LEFT_CEN_FREQ:
+void send_ecep_evnt_L_cen_freq(uint32_t u32_center_freq_hz)
+{
+    sIntern_event_setup_t event;
+
+    event.u8_id = ECEP_EVNT_LEFT_CEN_FREQ;
+    event.param.u32_cen_freq_hz = u32_center_freq_hz;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_L_cen_freq(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_RIGHT_CEN_FREQ:
+void send_ecep_evnt_R_cen_freq(uint32_t u32_center_freq_hz)
+{
+    sIntern_event_setup_t event;
+
+    event.u8_id = ECEP_EVNT_RIGHT_CEN_FREQ;
+    event.param.u32_cen_freq_hz = u32_center_freq_hz;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_R_cen_freq(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_LEFT_CEN_FREQ_AMP:
+void send_ecep_evnt_L_cen_freq_amp(float f32_center_freq_amp)
+{
+    sIntern_event_setup_t event;
+
+    event.u8_id = ECEP_EVNT_LEFT_CEN_FREQ_AMP;    
+    event.param.f32_cen_freq_amp = f32_center_freq_amp;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_L_cen_freq_amp(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_RIGHT_CEN_FREQ_AMP:
+void send_ecep_evnt_R_cen_freq_amp(float f32_center_freq_amp)
+{
+    sIntern_event_setup_t event;
+
+    event.u8_id = ECEP_EVNT_RIGHT_CEN_FREQ_AMP;    
+    event.param.f32_cen_freq_amp = f32_center_freq_amp;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_R_cen_freq_amp(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_MIC_RANGE:
+void send_ecep_evnt_mic_range(eFFT_hw_gain_stage_t hw_gain_stage)
+{
+    sIntern_event_setup_t event;
+
+    event.u8_id = ECEP_EVNT_MIC_RANGE; 
+    event.param.range = hw_gain_stage;
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_mic_range(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_LEFT_FFT_RES:
+void send_ecep_evnt_L_fft_res()
+{
+    sIntern_event_setup_t event;
+    event.u8_id = ECEP_EVNT_LEFT_FFT_RES; 
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_L_fft_res(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_RIGHT_FFT_RES:
+void send_ecep_evnt_R_fft_res()
+{
+    sIntern_event_setup_t event;
+    event.u8_id = ECEP_EVNT_RIGHT_FFT_RES; 
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_R_fft_res(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_LEFT_ADC_RAW:
+void send_ecep_evnt_L_adc_raw()
+{
+    sIntern_event_setup_t event;
+    event.u8_id = ECEP_EVNT_LEFT_ADC_RAW; 
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_L_adc_raw(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_RIGHT_ADC_RAW
+void send_ecep_evnt_R_adc_raw()
+{
+    sIntern_event_setup_t event;
+    event.u8_id = ECEP_EVNT_RIGHT_ADC_RAW; 
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_R_adc_raw(). Event queue is full"); 
+    }
+}
 
 
