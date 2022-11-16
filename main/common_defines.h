@@ -31,6 +31,8 @@
                                     // SKRIV OGSÅ I RAPOORTEN AF DEN HER VÆRDI SKAL VÆRE OVER 600 (se min maple fil hvor jeg berenger det) FOR AT FÅ EN HEL PERIODE AF DEN LAVESTE FREKVENS MED
 
 // MÅSKE LAV EN FFT RES LENGTH SOM ER DATA_BLOCK_SIZE / 2???
+// Måske lav en DATA_POINT / 2 define til alt fft stuff
+// Og kald den SINGLE_SIDED_FFT_REAL_RES_SIZE eller noget lignene
                                        
 
 #define ADC_SAMPLING_FREQ   80 * 1000      // see soc caps file for max value (limited by the internal ADC's of the ESP32-S3) 

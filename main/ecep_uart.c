@@ -31,37 +31,354 @@ static const char *TAG = "ecep_uart.c";
 static QueueHandle_t ecep_uart_queue;     // Queue for uart api
 static QueueHandle_t ecep_data_len_que;   // Queue used to syncronize ecep_packet_handler_task() from ecep_uart_event_task()
 
-static QueueHandle_t gs_xQueue_ecep_events; // Queue for ECEP events 
+static QueueHandle_t gs_xQueue_ecep_events;   // Queue for ECEP events 
+static QueueHandle_t gs_xQueue_pr_ecep_cmds;  // Queue for Patient Response ECEP commands
+static QueueHandle_t gs_xQueue_dsp_ecep_cmds; // Queue for DSP ECEP commands
 
 static uint8_t gs_au8_raw_uart_shr[UART_RD_BUF_SIZE];  // Raw uart read data (shared memory)
 static SemaphoreHandle_t gs_raw_uart_shr_mem_sem;
 
-static void ecep_command_handler(uint8_t u8_command_code, uint8_t * u8_params_and_bulk, uint16_t u8_params_and_bulk_len)
+static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_bulk, uint16_t u8_params_and_bulk_len) // SKAL MÅSKE HEDDE ecep_command_passer i stedet! Den executer ikke selve kommandoen. Idk
 {
-
-    
-
     // for(int32_t i = 0; i < u8_params_and_bulk_len ; i++)
     // {
-    //     ESP_LOGI(TAG, "0x%04x", u8_params_and_bulk[i]);
+    //     ESP_LOGI(TAG, "0x%04x", pv_params_and_bulk[i]);
     // }
 
-
+    sIntern_command_setup_t sIntern_command_setup;
 
     switch(u8_command_code)
     {
         case ECEP_CMD_FETCH_FFT:
+
+            if(u8_params_and_bulk_len != sizeof(eAudio_channel_t))
+            {
+                // Something went wrong. 
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.channel = *((eAudio_channel_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_SET_FFT_OUTP_FORM:
+
+            if(u8_params_and_bulk_len != sizeof(eFFT_output_form_t))
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.fft_output_format = *((eFFT_output_form_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_SET_FFT_WIND_TYPE:
+
+            if(u8_params_and_bulk_len != sizeof(eFFT_window_type_t))
+            {
+                // Something went wrong. 
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.fft_window = *((eFFT_window_type_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_SET_FFT_RES_AVG_CT:
+
+            if(u8_params_and_bulk_len != sizeof(uint32_t))
+            {
+                // Something went wrong. 
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.u32_fft_res_avg_count = *((uint32_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_SET_WIND_CORR_FACTOR:
+
+            if(u8_params_and_bulk_len != sizeof(eFFT_wind_corr_factor_t))
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.fft_win_corr_factor = *((eFFT_wind_corr_factor_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_FETCH_FFT_STGS:
+
+            if(u8_params_and_bulk_len != 0) // there is no param for this command
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+
+            break;
+
+        case ECEP_CMD_FETCH_FFT_TOTAL_DUR:
+
+            if(u8_params_and_bulk_len != 0) // there is no param for this command
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_FETCH_ADC_RAW_DATA:
+
+            if(u8_params_and_bulk_len != sizeof(eAudio_channel_t))
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.channel = *((eAudio_channel_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_FETCH_CEN_FREQ:
+
+            if(u8_params_and_bulk_len != sizeof(eAudio_channel_t))
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.channel = *((eAudio_channel_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_FETCH_CEN_FREQ_AMP:
+
+            if(u8_params_and_bulk_len != sizeof(eAudio_channel_t))
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.channel = *((eAudio_channel_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_SET_MIC_RANGE:
+
+            if(u8_params_and_bulk_len != sizeof(eFFT_hw_gain_stage_t))
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.range = *((eFFT_hw_gain_stage_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+
+            break;
+
+        case ECEP_CMD_FETCH_MIC_RANGE:
+
+            if(u8_params_and_bulk_len != 0) // there is no param for this command
+            {
+                // Something went wrong. 
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+
+            if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_TRIG_PR_CLICK:
+
+            if(u8_params_and_bulk_len != 0) // there is no param for this command
+            {
+                // Something went wrong. 
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+
+            if(xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_TRIG_PR_HOLD:
+
+            if(u8_params_and_bulk_len != 0) // there is no param for this command
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+
+            if(xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_TRIG_PR_RELEASE:
+
+            if(u8_params_and_bulk_len != 0) // there is no param for this command
+            {
+                // Something went wrong. 
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+
+            if(xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_TRIG_PR_PRESS:
+
+            if(u8_params_and_bulk_len != sizeof(uint32_t))
+            {
+                // Something went wrong. 
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.u32_time = *((uint32_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_SET_PR_DEF_STATE:
+
+            if(u8_params_and_bulk_len != sizeof(eRelay_state_t))
+            {
+                // Something went wrong. 
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+            sIntern_command_setup.param.relay_state = *((eRelay_state_t *) pv_params_and_bulk);
+
+            if(xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full"); 
+            }
+            break;
+
+        case ECEP_CMD_FETCH_PR_DEF_STATE:
+
+            if(u8_params_and_bulk_len != 0) // there is no param for this command
+            {
+                // Something went wrong.
+                ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
+                esp_restart(); 
+            }
+
+            sIntern_command_setup.u8_id = u8_command_code;
+
+            if(xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+            {
+                ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full"); 
+            }
             break;
         
-        // case 0x08:
-        //     ESP_LOGI(TAG, "Pizza lets goo");
+        case ECEP_CMD_PING:
+            send_ecep_evnt_pong();
+            break;
 
-        //     break;
-
-        // MANGLER EN MASSE
         default:
+            send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_CMD, u8_command_code); 
             break;
     }
+
+    // Reset struct - just to be sure:
+    memset(&sIntern_command_setup, 0, sizeof(sIntern_command_setup));
 
 }
 
@@ -127,14 +444,14 @@ void ecep_packet_handler_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task()
                         // Header error checks:
                         if (u8_packet_type != ECEP_PACKET_TYPE)
                         {
-                            // Something went wrong. Packets are now unsyncronized. Trying to fix by restarting.
-                            ESP_LOGE(TAG, "ERROR: invalid packet type");
+                            // Something went wrong. 
+                            ESP_LOGE(TAG, "ERROR: invalid packet type. Packets are now potentially unsyncronized. Trying to fix by restarting...");
                             esp_restart(); 
-                        }
+                        } 
                         if (u16_packet_len > ECEP_MAX_CMD_PACKET_LEN)
                         {
-                            // Something went wrong. Packets are now unsyncronized. Trying to fix by restarting.
-                            ESP_LOGE(TAG, "ERROR: invalid packet length");
+                            // Something went wrong. 
+                            ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
                             esp_restart(); 
                         }
                     }
@@ -303,8 +620,11 @@ static void baud_error_test(int32_t i32_uart_num ,int32_t i32_baud)
 }
 
 
-void ecep_uart_init()
+void ecep_uart_init(QueueHandle_t xQueue_pr_ecep_cmds, QueueHandle_t xQueue_dsp_ecep_cmds)
 {
+    gs_xQueue_pr_ecep_cmds  = xQueue_pr_ecep_cmds;
+    gs_xQueue_dsp_ecep_cmds = xQueue_dsp_ecep_cmds;
+
     // Create ECEP event queue:
     /* The programmer is expected to use the "Convenience functions" at the bottom of this file to access the event queue from throughout the application.
         If the programmer instead want to access the event queue directly: create this event queue in main.c instead and pass it to the relevant files. */
@@ -529,6 +849,18 @@ void send_ecep_evnt_R_adc_raw()
     if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
     {
        ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_R_adc_raw(). Event queue is full"); 
+    }
+}
+
+// Send ECEP_EVNT_PONG:
+void send_ecep_evnt_pong()
+{
+    sIntern_event_setup_t event;
+    event.u8_id = ECEP_EVNT_PONG; 
+
+    if(xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    {
+       ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_pong(). Event queue is full"); 
     }
 }
 
