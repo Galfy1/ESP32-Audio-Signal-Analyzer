@@ -284,6 +284,16 @@ void ecep_uart_event_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task() I S
     }  
 }
 
+
+// static void ecep_uart_tx_task()
+// {
+//     while(true){
+
+//         vTaskDelay(1000 / portTICK_PERIOD_MS);
+//     }
+// }
+
+
 static void baud_error_test(int32_t i32_uart_num ,int32_t i32_baud)
 {
     uint32_t u32_actual_baud;
@@ -381,7 +391,4 @@ void send_ecep_evnt_pr_def_state(eRelay_state_t default_relay_state)
        ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_pr_def_state(). Event queue is full"); 
     }
 }
-
-
-
 
