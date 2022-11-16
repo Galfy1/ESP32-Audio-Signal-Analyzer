@@ -33,7 +33,7 @@
 #define ECEP_CMD_TRIG_PR_HOLD               0x0E
 #define ECEP_CMD_TRIG_PR_RELEASE            0x0F
 #define ECEP_CMD_TRIG_PR_PRESS              0x10
-#define ECEP_CMD_TOG_PR_DEF_STATE           0x11
+#define ECEP_CMD_SET_PR_DEF_STATE           0x11
 #define ECEP_CMD_FETCH_PR_DEF_STATE         0x12
 #define ECEP_CMD_PING                       0x13
 
@@ -102,7 +102,8 @@ typedef enum{
     ECEP_SUCCESS = 1,
     ECEP_FAIL = 2,
     ECEP_ERR_INVALID_PARAM = 3,
-    ECEP_ERR_INVALID_CMD = 4,
+    ECEP_ERR_INVALID_CMD = 4,          
+    ECEP_ERR_INVALID_PACKET_LEN = 4,  // Kan ikke bruges (da vi resetter for at prøve at fixe problemet) aka bare slet
     ECEP_ERR_UNKNOWN = 5,
     ECEP_errorcode2 = 6,
     ECEP_errorcode3 = 7,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!
@@ -137,17 +138,18 @@ typedef union uCommand_parameters{
     uint32_t u32_fft_res_avg_count;
     eFFT_wind_corr_factor_t fft_win_corr_factor;                 
     eFFT_hw_gain_stage_t range;   // Måske hedde mic_range i stedet?     
-    uint32_t u32_time;            // Skal måske hedde fft duration eller noget lignene, så man kan se den hører til ECEP_EVNT_FFT_TOT_DUR
+    uint32_t u32_time;            // Skal måske hedde fft duration eller noget lignene, så man kan se den hører til ECEP_EVNT_FFT_TOT_DUR. Eller bruges den til andre ting også? svar: ja det gør den vidst
+    eRelay_state_t relay_state;
 } uCMD_params_t;
 
 typedef union uEvent_parameters{
     sStatus_event_t status_event;    // Burde den ikke hedde command status? Det er vel underforstået at det er et event siden den ligger i en EVNT_param union. (også så den matcher event ID navnet)
     sFFT_stgs_t FFT_stgs;
-    uint32_t u32_time;             // Skal måske hedde fft duration eller noget lignene, så man kan se den hører til ECEP_EVNT_FFT_TOT_DUR
+    uint32_t u32_time;             // Skal måske hedde fft duration eller noget lignene, så man kan se den hører til ECEP_EVNT_FFT_TOT_DUR. Eller bruges den til andre ting også?
     uint32_t u32_cen_freq_hz;
     float f32_cen_freq_amp;     
     eFFT_hw_gain_stage_t range;   // Måske hedde mic_range i stedet? 
-    eRelay_state_t pr_default;  
+    eRelay_state_t pr_default;    
 } uEVNT_params_t;
 
 // Command/Event structs used as elements for the command/event queues:
