@@ -13,7 +13,9 @@ ASD
     1. ESP-IDF: Add vscode configuration folder
 4. Use the Espressif IDF extension bar at the buttom of VS Code to build and flash. Monitoring via the "USB-to-UART" port on the ESP32-S3-DevKitC-1 is not possible for this project since UART0 is repurposed for ECEP (a custom command event protocol). For monitoring / debug-console please use GPIO ASD(RX) and GPIO ASD(TX).
  
-(An alternative to step 1 and 2 is to pass --recurse-submodules to the git clone command. This will automatically initialize and update each submodule in the repository)
+(An alternative to step 1 and 2 is to pass --recurse-submodules to the git clone command. This will automatically initialize and update each submodule in the repository) \
+
+Note: "git submodule update --remote" git command can be used to fetch and merge newest changes for the submodules.
 
 ## Required Hardware
 This project is created for the ESP32-S3 \
