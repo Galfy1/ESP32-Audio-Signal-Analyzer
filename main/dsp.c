@@ -87,11 +87,12 @@ static void find_cent_freq(float * array, int32_t array_size, uint32_t * p_cent_
     }
 
     *p_cent_freq_val = biggest_val;
-    *p_cent_freq_hz = biggest_val_index * (ADC_SAMPLING_FREQ / (DATA_BLOCK_SIZE));    /*  Bin_freq = Bin_nr * (fs / N).   
+    *p_cent_freq_hz = biggest_val_index * (ADC_SAMPLING_FREQ / (DATA_BLOCK_SIZE));    /*  Bin_freq = Bin_nr * (fs / N).    
                                                                                        (DATA_BLOCK_SIZE is used instead of DATA_BLOCK_SIZE/2 even though DATA_BLOCK_SIZE/2 is the size of the FFT result.
                                                                                         This is because the half sized FFT result is single sided and goes from 0 - fny. The Bin_nr to Bin_freq expression uses the range to fs (not fny),
                                                                                         so we use the full DATA_BLOCK_SIZE in the expression)       
                                                                                     */
+                                                                                   // (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
     //ESP_LOGI(DSP_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
 }
 
@@ -193,6 +194,7 @@ void dsp_ecep_handler_task()
 
                     // Execute command:
                     gs_window_used = dsp_ecep_command.param.fft_window;
+                    fft_wrapper_set_wind(gs_window_used);
                     send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_SET_FFT_WIND_TYPE);
                     break;
 
@@ -316,6 +318,7 @@ void dsp_ecep_handler_task()
 
                     // Execute command:
                     gs_hw_gain_stage = hw_gain_stage_temp;
+                    // !!! HUSK !!! OGSÅ ÆNDRE MIC STAGEN MED HARDWARE GPIO !!!
                     send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_SET_MIC_RANGE);
                     break;
 

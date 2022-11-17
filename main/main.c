@@ -106,7 +106,7 @@ void app_main(void)
     // HAR SAT dsp_left_ch_task og dsp_right_ch_task TIL BEGGE AT KØRE OP CORE 1 TIL AT STARTE MED. MEN DEN ENE SKAL OVER PÅ CORE 2 PÅ ET TIDSPUNKT
     // MÅSKE GØR STACK SIZEN MINDRE PÅ DE SMÅ TASKS DER IKKE BEHØVER SÅ MEGET STACK PLADS
 
-    // Create tasks (order is important)
+    // Create tasks (order is important for some of them)
     xTaskCreatePinnedToCore(dsp_left_ch_task, "dsp_left_task", 4096, NULL, 4, &dsp_left_task_handle, 1); // Use core 1 
     xTaskCreatePinnedToCore(dsp_right_ch_task, "dsp_right_task", 4096, NULL, 4, &dsp_right_task_handle, 1); // Use core 2 
     adc_set_dsp_task_handles(dsp_left_task_handle, dsp_right_task_handle);  /* Give the handles of the dsp tasks to the adc task.
@@ -115,8 +115,8 @@ void app_main(void)
     // xTaskCreatePinnedToCore(dummy_task, "dummy_task", 4096, NULL, 4, NULL, 1); // Use core 1. 
     xTaskCreatePinnedToCore(patient_resp_task, "patient_resp_task", 4096, NULL, 4, NULL, 1); // Use core 1.     
     xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
-    xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 8192, NULL, 4, NULL, 1);  // (Requires a stack size a bit larger than 4096 to not overflow it)
-    xTaskCreatePinnedToCore(dsp_ecep_handler_task, "dsp_ecep_handler_task", 2048, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 8192, NULL, 4, NULL, 1);  // (A stack size of 4096 is too small (will overflow))
+    xTaskCreatePinnedToCore(dsp_ecep_handler_task, "dsp_ecep_handler_task", 4096, NULL, 4, NULL, 1); // (A stack size of 2048 is too small (will overflow))
 
 
     // Amount of PSRAM left:

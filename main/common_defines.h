@@ -21,14 +21,18 @@
                                             For Radix4:  DATA_BLOCK_SIZE/2 = 4^r  where r is an integer 
                                             (FFT of bin size half the data block size is used. This is why DATA_BLOCK_SIZE is divided by 2)
 
-                                            Note: If this values is too big, the ESP will run out of DRAM 
-                                            (see printed size summary or "ESP-ISF: Size analysis of the binaries" command after building)
+                                            Note: If this values is too big, the ESP will run out of DRAM. This problem is lessened by the fact that most arrays utilizing DATA_BLOCK_SIZE is placed in PSRAM (not DRAM!) 
+                                            ( see printed size summary or "ESP-ISF: Size analysis of the binaries" command after building. Note that this size summary does not include 
+                                             the dynamically allocated memory that is allocated at runtime. The remaining internal memory (aka excluding PSRAM) after dynamic allocation 
+                                             are printed at the end of app_main() )
                                     */ 
                                     
                                     // SKRIV I RAPPORTEN HVORFOR VI VALGTE 2048 (hvis den næste 4^r værdi bruges, 8192, ville esp'en løbe tør for DRAM 
                                     // (Fordi vi bruger så mange 32 bit float arrays af størrelsen DATA_BLOCK_SIZE)
+                                    // Update: Dette er outdated info...
 
                                     // SKRIV OGSÅ I RAPOORTEN AF DEN HER VÆRDI SKAL VÆRE OVER 600 (se min maple fil hvor jeg berenger det) FOR AT FÅ EN HEL PERIODE AF DEN LAVESTE FREKVENS MED
+                                    // Update: Ved ikke om det er nyttig viden. måske er det
 
 // MÅSKE LAV EN FFT RES LENGTH SOM ER DATA_BLOCK_SIZE / 2???
 // Måske lav en DATA_POINT / 2 define til alt fft stuff

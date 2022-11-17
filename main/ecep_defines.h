@@ -62,8 +62,8 @@
 
 // Parameter enums (for both commands and events)
 typedef enum{
-    right = 1,
-    left = 2,
+    left = 1,
+    right = 2,
     both = 3,
 } eAudio_channel_t;
 
@@ -103,10 +103,8 @@ typedef enum{
     ECEP_FAIL = 2,
     ECEP_ERR_INVALID_PARAM = 3,
     ECEP_ERR_INVALID_CMD = 4,          
-    ECEP_ERR_INVALID_PACKET_LEN = 4,  // Kan ikke bruges (da vi resetter for at prøve at fixe problemet) aka bare slet
+    // ECEP_ERR_INVALID_PACKET_LEN = 4,  // Kan ikke bruges (da vi resetter for at prøve at fixe problemet) aka bare slet
     ECEP_ERR_UNKNOWN = 5,
-    ECEP_errorcode2 = 6,
-    ECEP_errorcode3 = 7,     // Husk at ændre disse fejlkoder og tilføje flere efter behov!!!
 } eCMD_status_t;
 
 // Parameter structs (for both commands and events):
