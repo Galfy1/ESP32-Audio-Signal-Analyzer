@@ -60,7 +60,6 @@ void app_main(void)
     memset(pf32_L_fft_res_shr, 0 ,DATA_BLOCK_SIZE/2 * sizeof(float)); 
     memset(pf32_R_fft_res_shr, 0 ,DATA_BLOCK_SIZE/2 * sizeof(float));
 
-
     // Create sempahores:
     SemaphoreHandle_t adc1_shared_mem_sem = xSemaphoreCreateMutex();    // Mutex for gs_af32_adc1_shared
     SemaphoreHandle_t adc2_shared_mem_sem = xSemaphoreCreateMutex();    // Mutex for gs_af32_adc2_shared
@@ -115,10 +114,11 @@ void app_main(void)
     // xTaskCreatePinnedToCore(dummy_task, "dummy_task", 4096, NULL, 4, NULL, 1); // Use core 1. 
     xTaskCreatePinnedToCore(patient_resp_task, "patient_resp_task", 4096, NULL, 4, NULL, 1); // Use core 1.     
     xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
-    // xTaskCreatePinnedToCore(ecep_uart_tx_task, "ecep_uart_tx_task", 4096, NULL, 4, NULL, 1); // set up packet and transmit through UART
+    xTaskCreatePinnedToCore(ecep_uart_tx_task, "ecep_uart_tx_task", 4096, NULL, 4, NULL, 1); // set up packet and transmit through UART
     xTaskCreatePinnedToCore(ecep_packet_handler_task, "ecep_packet_handler", 8192, NULL, 4, NULL, 1);  // (Requires a stack size a bit larger than 4096 to not overflow it)
 
 
-    // Amount of PSRAM left:
-    ESP_LOGI(TAG, "Amount of PSRAM left: %i" , (int) heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    // Log remaning memory:
+    ESP_LOGI(TAG, "Amount of PSRAM remaining: %i" , (int) heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    ESP_LOGI(TAG, "Amount of internal memory remaining: %i", (int) heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 }

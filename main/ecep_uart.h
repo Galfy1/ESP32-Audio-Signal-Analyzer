@@ -12,7 +12,7 @@
 
 void ecep_packet_handler_task();
 void ecep_uart_event_task();
-static void ecep_uart_tx_task()
+void ecep_uart_tx_task();
 
 void ecep_uart_init();
 

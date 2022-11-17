@@ -28,6 +28,11 @@ static const char *TAG = "ecep_uart.c";
 #define BUF_SIZE 1024  // Ved ikke om det bliver et problem hvis den her er under størrelsen på en command pakke? Måske ikke Finder vi måske aldrig ud af, da vi ikke har en command pakke over 1024 i størrelse anyway.
 #define UART_RD_BUF_SIZE  BUF_SIZE
 
+#define TX_PACKET_TYPE_BYTE           0
+#define TX_PACKET_CMD_EVNT_BYTE       1
+#define TX_PACKET_PACK_LEN_LOW_BYTE   2
+#define TX_PACKET_PACK_LEN_HIGH_BYTE  3
+
 static QueueHandle_t ecep_uart_queue;     // Queue for uart api
 static QueueHandle_t ecep_data_len_que;   // Queue used to syncronize ecep_packet_handler_task() from ecep_uart_event_task()
 
@@ -285,13 +290,128 @@ void ecep_uart_event_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task() I S
 }
 
 
-// static void ecep_uart_tx_task()
-// {
-//     while(true){
+void ecep_tx_packet_header_prep(uint8_t *pu8_tx_packet_buf, uint8_t packet_type, uint8_t event_id, uint16_t packet_len)
+{
+    // | Packet Type | Command/event code | Packet Length (low byte) | Packet Length (high byte) |
+    //    (1 byte)         (1 byte)                 (1 byte)                    (1 byte)
 
-//         vTaskDelay(1000 / portTICK_PERIOD_MS);
-//     }
-// }
+    pu8_tx_packet_buf[TX_PACKET_TYPE_BYTE] = (uint8_t) packet_type;
+    pu8_tx_packet_buf[TX_PACKET_CMD_EVNT_BYTE] = (uint8_t) event_id;
+    pu8_tx_packet_buf[TX_PACKET_PACK_LEN_LOW_BYTE] = (uint8_t) packet_len & 0x00FF; 
+    pu8_tx_packet_buf[TX_PACKET_PACK_LEN_HIGH_BYTE] = (uint8_t) (packet_len & 0xFF00) >> 8;
+
+}
+
+void ecep_uart_tx_task()
+{
+
+    // Packet:
+    // | Header (4 bytes) | Cmd/Evt param struct | Bulk data |
+
+    sIntern_event_setup_t ecep_event;
+    uint16_t packet_len = 0;
+
+    uint8_t *pu8_tx_packet_buf = heap_caps_malloc(ECEP_MAX_EVNT_PACKET_LEN, MALLOC_CAP_SPIRAM); // TX packet buffer to be transmitted. It size equal the maximum packet size in bytes - 2^16 = 65536
+    if((pu8_tx_packet_buf == NULL))
+    {
+        ESP_LOGE(TAG, "ERROR: while allocating memory for TX packet buffer in PSRAM");
+    }
+    memset(pu8_tx_packet_buf, 0, ECEP_MAX_EVNT_PACKET_LEN);
+
+    send_ecep_evnt_cmd_status(ECEP_FAIL, ECEP_CMD_FETCH_PR_DEF_STATE);
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    while (1)
+    {
+        if( xQueueReceive(gs_xQueue_ecep_events, &ecep_event, 0) == pdTRUE)
+        {
+            packet_len = ECEP_HEADER_LEN;
+
+            switch (ecep_event.u8_id)
+            {
+                case ECEP_EVNT_COMMAND_STATUS:
+
+                    packet_len += sizeof(uint8_t) * 2;
+
+                    ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_COMMAND_STATUS, packet_len);
+                    pu8_tx_packet_buf[4] = (uint8_t) ecep_event.param.status_event.u8_parent_cmd_id;
+                    pu8_tx_packet_buf[5] = (uint8_t) ecep_event.param.status_event.status;
+                    
+                    break;
+                
+                case ECEP_EVNT_LEFT_FFT_RES:
+
+                    break;
+
+                case ECEP_EVNT_RIGHT_FFT_RES:
+
+                    break;
+
+                case ECEP_EVNT_FFT_STGS:
+
+                    packet_len += sizeof(uint8_t) * 4;
+
+                    ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_FFT_STGS, packet_len);
+                    pu8_tx_packet_buf[4] = (uint8_t) ecep_event.param.FFT_stgs.fft_output_format;
+                    pu8_tx_packet_buf[5] = (uint8_t) ecep_event.param.FFT_stgs.fft_window;
+                    pu8_tx_packet_buf[6] = (uint8_t) ecep_event.param.FFT_stgs.u32_fft_res_avg_count;
+                    pu8_tx_packet_buf[7] = (uint8_t) ecep_event.param.FFT_stgs.fft_corr_factor;
+                    
+                    break;
+
+                case ECEP_EVNT_FFT_TOT_DUR:
+
+                    packet_len += sizeof(uint32_t);
+
+                    ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_FFT_TOT_DUR, packet_len);
+                    pu8_tx_packet_buf[4] = (uint8_t) packet_len & 0x00FF; 
+                    pu8_tx_packet_buf[5] = (uint8_t) (packet_len & 0xFF00) >> 8;
+                    pu8_tx_packet_buf[6] = (uint8_t) (packet_len & 0xFF00) >> 16;
+                    pu8_tx_packet_buf[7] = (uint8_t) (packet_len & 0xFF00) >> 24;
+                    
+                    break;
+
+                case ECEP_EVNT_LEFT_ADC_RAW:
+
+                    break;
+
+                case ECEP_EVNT_RIGHT_ADC_RAW:
+
+                    break;
+
+                case ECEP_EVNT_CEN_FREQ:
+
+                    break;
+
+                case ECEP_EVNT_CEN_FREQ_AMP:
+
+                    break;
+
+                case ECEP_EVNT_PR_DEF_STATE:
+
+                    break;
+
+                case ECEP_EVNT_PONG:
+
+                    break;
+
+                default:
+                    break;
+
+                uart_write_bytes(UART_NUM_0, pu8_tx_packet_buf, packet_len);
+
+            }
+        }
+    }
+
+    // static const char *TX_TASK_TAG = "TX_TASK";
+    // esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
+    // while (1) {
+    //     sendData(TX_TASK_TAG, "Hello world\n");
+    //     vTaskDelay(2000 / portTICK_PERIOD_MS);
+    // }
+}
 
 
 static void baud_error_test(int32_t i32_uart_num ,int32_t i32_baud)
@@ -339,8 +459,7 @@ void ecep_uart_init()
     // Set ECEP UART pins:
     ESP_ERROR_CHECK(uart_set_pin(ECEP_UART_NUM, ECEP_TXD_PIN, ECEP_RXD_PIN, ECEP_RTS_PIN, ECEP_CTS_PIN));
     // Install UART driver:
-    ESP_ERROR_CHECK(uart_driver_install(ECEP_UART_NUM, BUF_SIZE * 2, BUF_SIZE * 2, 10, &ecep_uart_queue, 0));
-
+    ESP_ERROR_CHECK(uart_driver_install(ECEP_UART_NUM, BUF_SIZE * 2, ECEP_MAX_EVNT_PACKET_LEN + 100, 10, &ecep_uart_queue, 0));
     // baud_error_test(UART_NUM_1, 115200);
     // baud_error_test(UART_NUM_1, 230400);
     // baud_error_test(UART_NUM_1, 460800);
