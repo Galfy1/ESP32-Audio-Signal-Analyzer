@@ -465,11 +465,11 @@ void ecep_rx_packet_handler_task()
                     remaining_data_len = u32_data_len - byte_counter;
                     chunk_size_to_cpy = (remaining_package_len < remaining_data_len ? remaining_package_len : remaining_data_len);  // chunk size to copy is limited by either u16_packet_len or u32_data_len
 
-                    ESP_LOGE(TAG, "remaining_package_len: %i", (int) remaining_package_len);
-                    ESP_LOGE(TAG, "remaining_data_len: %i", (int) remaining_data_len);
-                    ESP_LOGE(TAG, "chunk_size_to_cpy: %i", (int) chunk_size_to_cpy);
-                    ESP_LOGE(TAG, "u8_packet_data[u32_package_byte_counter]: %i", (int) u8_packet_data[u32_package_byte_counter]);
-                    ESP_LOGE(TAG, "u32_package_byte_counter: %i", (int) u32_package_byte_counter);
+                    // ESP_LOGE(TAG, "remaining_package_len: %i", (int) remaining_package_len);
+                    // ESP_LOGE(TAG, "remaining_data_len: %i", (int) remaining_data_len);
+                    // ESP_LOGE(TAG, "chunk_size_to_cpy: %i", (int) chunk_size_to_cpy);
+                    // ESP_LOGE(TAG, "u8_packet_data[u32_package_byte_counter]: %i", (int) u8_packet_data[u32_package_byte_counter]);
+                    // ESP_LOGE(TAG, "u32_package_byte_counter: %i", (int) u32_package_byte_counter);
 
                     memcpy(&u8_packet_data[u32_package_byte_counter], &au8_raw_uart_copy[byte_counter], chunk_size_to_cpy);
 

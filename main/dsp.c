@@ -145,8 +145,6 @@ static void find_cent_freq(float * array, int32_t array_size, uint32_t * p_cent_
 
 
 
-
-
 void dsp_ecep_handler_task()
 {
     eFFT_output_form_t output_form_temp;
@@ -359,7 +357,6 @@ void dsp_ecep_handler_task()
                     break;
             }
         }
-
     }
 }
 
