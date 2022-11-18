@@ -6,12 +6,18 @@
 #define ECEP_HEADER_LEN       4                                       // Header length In bytes
 
 #define ECEP_MAX_CMD_PACKET_LEN 1000                                        // Max packet length for an event packet in bytes. 
-                                                                            /* (value is arbitrarily chosen. Is simply has to be at least the size of the largest command package.
-                                                                               No command package is currently over 1000 bytes in size.) */
-#define ECEP_MAX_EVNT_PACKET_LEN  ECEP_HEADER_LEN + (4*DATA_BLOCK_SIZE)   // Max packet length for an event packet in bytes.
-                                                                           /* (chosen by biggest Event. In this case: Left/Right ADC Raw data event)
-                                                                             (*4 because bulk raw adc data is stored as floats. The L/R ADC Raw data event has no param struct size to account for)  */
+                                                                                        /* (value is arbitrarily chosen. Is simply has to be at least the size of the largest command package.
+                                                                                           No command package is currently over 1000 bytes in size.) */
+#define ECEP_MAX_EVNT_PACKET_LEN        ECEP_HEADER_LEN + (sizeof(float) * DATA_BLOCK_SIZE)   // Max packet length for an event packet in bytes.
+                                                                                        // (chosen by biggest Event. In this case: Left/Right ADC Raw data event)
+
 #define ECEP_PACKET_TYPE 0x42
+
+
+#define TX_PACKET_TYPE_BYTE             0
+#define TX_PACKET_CMD_EVNT_BYTE         1
+#define TX_PACKET_PACK_LEN_LOW_BYTE     2
+#define TX_PACKET_PACK_LEN_HIGH_BYTE    3
 
 
 // ---------------------------- Command/Event IDs  ----------------------------
@@ -45,10 +51,13 @@
 #define ECEP_EVNT_FFT_TOT_DUR               0x05
 #define ECEP_EVNT_LEFT_ADC_RAW              0x06
 #define ECEP_EVNT_RIGHT_ADC_RAW             0x07
-#define ECEP_EVNT_CEN_FREQ                  0x08
-#define ECEP_EVNT_CEN_FREQ_AMP              0x09
-#define ECEP_EVNT_PR_DEF_STATE              0x0A
-#define ECEP_EVNT_PONG                      0x0B
+#define ECEP_EVNT_LEFT_CEN_FREQ             0x08   
+#define ECEP_EVNT_RIGHT_CEN_FREQ            0x09   
+#define ECEP_EVNT_LEFT_CEN_FREQ_AMP         0x0A  
+#define ECEP_EVNT_RIGHT_CEN_FREQ_AMP        0x0B  
+#define ECEP_EVNT_MIC_RANGE                 0x0C
+#define ECEP_EVNT_PR_DEF_STATE              0x0D
+#define ECEP_EVNT_PONG                      0x0E
 
 
 
@@ -58,19 +67,22 @@
 // DE SKAL MÅSKE HAVE ECEP PREFIX FORAN SIG:
 
 // Parameter enums (for both commands and events)
-typedef enum{
+typedef enum
+{
     right = 1,
     left = 2,
     both = 3,
 } eAudio_channel_t;
 
-typedef enum{
+typedef enum
+{
     ampltitude_mV = 1,      // return result as amplitude in mV 
     ampltitude_dB_SPL = 2,  // return result as amplitude in dB SPL
     power_mV = 3,           // return result as power in mV 
 } eFFT_output_form_t;
 
-typedef enum{
+typedef enum
+{
     hann = 1, 
     blackman = 2, 
     blackman_harris = 3, 
@@ -79,23 +91,27 @@ typedef enum{
     flat_top = 6,
 } eFFT_window_type_t;
 
-typedef enum{
+typedef enum
+{
     none = 1,
     amplitude = 2,
     energy = 3,
 } eFFT_wind_corr_factor_t;
 
-typedef enum {
+typedef enum
+{
     up_to_90dB_SPL = 1,
     up_to_120dB_SPL = 2,
 } eFFT_hw_gain_stage_t;
 
-typedef enum{
+typedef enum
+{
     norm_open = 1,
     norm_closed = 2,
 } eRelay_state_t;
 
-typedef enum{
+typedef enum
+{
     ECEP_SUCCESS = 1,
     ECEP_FAIL = 2,
     ECEP_ERR_INVALID_PARAM = 3,
@@ -106,7 +122,8 @@ typedef enum{
 } eCMD_status_t;
 
 // Parameter structs (for both commands and events):
-typedef struct{
+typedef struct
+{
 
     eFFT_output_form_t fft_output_format;
     eFFT_window_type_t fft_window;
@@ -115,7 +132,9 @@ typedef struct{
 
 } sFFT_stgs_t;
 
-typedef struct{
+
+typedef struct
+{
 
     uint8_t u8_parent_cmd_id;
     eCMD_status_t status;
@@ -127,7 +146,8 @@ typedef struct{
 
 // ---------------- Unions/Structs used for Internal task communication ----------------
 
-typedef union uCommand_parameters{
+typedef union uCommand_parameters
+{
     eAudio_channel_t channel;                   
     eFFT_output_form_t fft_output_format;     
     eFFT_window_type_t fft_window;      
@@ -137,25 +157,28 @@ typedef union uCommand_parameters{
     uint32_t u32_time;            
 } uCMD_params_t;
 
-typedef union uEvent_parameters{
+typedef union uEvent_parameters
+{
     sStatus_event_t status_event;    // Burde den ikke hedde command status? Det er vel underforstået at det er et event siden den ligger i en EVNT_param union. (også så den matcher event ID navnet)
     sFFT_stgs_t FFT_stgs;
-    uint32_t u32_time;
+    uint32_t u32_time;               // Time in ms
     uint32_t u32_cen_freq_hz;
-    uint32_t u32_cen_freq_amp;
+    float f32_cen_freq_amp;
     eFFT_hw_gain_stage_t range;   // Måske hedde mic_range i stedet? 
     eRelay_state_t pr_default;  
 } uEVNT_params_t;
 
 // Command/Event structs used as elements for the command/event queues:
-typedef struct{
+typedef struct
+{
 
     uint8_t u8_id;
     uCMD_params_t param;
 
 } sIntern_command_setup_t;
 
-typedef struct{
+typedef struct
+{
 
     uint8_t u8_id;
     uEVNT_params_t param;
