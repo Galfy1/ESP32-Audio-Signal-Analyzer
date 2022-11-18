@@ -87,11 +87,12 @@ static void find_cent_freq(float * array, int32_t array_size, uint32_t * p_cent_
     }
 
     *p_cent_freq_val = biggest_val;
-    *p_cent_freq_hz = biggest_val_index * (ADC_SAMPLING_FREQ / (DATA_BLOCK_SIZE));    /*  Bin_freq = Bin_nr * (fs / N).   
+    *p_cent_freq_hz = biggest_val_index * (ADC_SAMPLING_FREQ / (DATA_BLOCK_SIZE));    /*  Bin_freq = Bin_nr * (fs / N).    
                                                                                        (DATA_BLOCK_SIZE is used instead of DATA_BLOCK_SIZE/2 even though DATA_BLOCK_SIZE/2 is the size of the FFT result.
                                                                                         This is because the half sized FFT result is single sided and goes from 0 - fny. The Bin_nr to Bin_freq expression uses the range to fs (not fny),
                                                                                         so we use the full DATA_BLOCK_SIZE in the expression)       
                                                                                     */
+                                                                                   // (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
     //ESP_LOGI(DSP_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
 }
 
@@ -141,6 +142,7 @@ void dsp_ecep_handler_task()
             switch(u8_ecep_cmd_id)
             {
                 case ECEP_CMD_FETCH_FFT: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_FFT received");
                     switch(dsp_ecep_command.param.channel)
                     {  
                         case left:
@@ -163,6 +165,7 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_SET_FFT_OUTP_FORM: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_FFT_OUTP_FORM received");
                     // Check for valid param:
                     output_form_temp = dsp_ecep_command.param.fft_output_format;
                     if((output_form_temp!=ampltitude_mV) && (output_form_temp!=ampltitude_dB_SPL) && (output_form_temp!=power_mV))
@@ -178,6 +181,7 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_SET_FFT_WIND_TYPE: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_FFT_WIND_TYPE received");
                     // Check for valid param:
                     wind_type_temp = dsp_ecep_command.param.fft_window;
                     if((wind_type_temp!=hann) && (wind_type_temp!=blackman) && (wind_type_temp!=blackman_harris) 
@@ -190,16 +194,19 @@ void dsp_ecep_handler_task()
 
                     // Execute command:
                     gs_window_used = dsp_ecep_command.param.fft_window;
+                    fft_wrapper_set_wind(gs_window_used);
                     send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_SET_FFT_WIND_TYPE);
                     break;
 
                 case ECEP_CMD_SET_FFT_RES_AVG_CT: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_FFT_RES_AVG_CT received");
                     gs_i32_fft_avg_max_cnt = dsp_ecep_command.param.u32_fft_res_avg_count;
                     calc_fft_duration_ms(); // recalc total fft time
                     send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_SET_FFT_RES_AVG_CT);
                     break;
 
                 case ECEP_CMD_SET_WIND_CORR_FACTOR: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_WIND_CORR_FACTOR received");
                     // Check for valid param:
                     wind_corr_fact_temp = dsp_ecep_command.param.fft_win_corr_factor;
                     if((wind_corr_fact_temp != none) && (wind_corr_fact_temp != amplitude) && (wind_corr_fact_temp != energy))
@@ -215,18 +222,21 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_FETCH_FFT_STGS: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_FFT_STGS received");
                     // Execute command:
                     send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT_STGS);
                     send_ecep_evnt_fft_stgs(gs_fft_out_format, gs_window_used, gs_i32_fft_avg_max_cnt, gs_wind_corr_factor);
                     break;
 
                 case ECEP_CMD_FETCH_FFT_TOTAL_DUR:
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_FFT_TOTAL_DUR received");
                     // Execute command: 
                     send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT_TOTAL_DUR);
                     send_ecep_evnt_fft_tot_dur(gs_u32_total_fft_dur_ms);
                     break;
 
                 case ECEP_CMD_FETCH_ADC_RAW_DATA: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_ADC_RAW_DATA received");
                     switch(dsp_ecep_command.param.channel)
                     {  
                         case left:
@@ -249,6 +259,7 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_FETCH_CEN_FREQ: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_CEN_FREQ received");
                     switch(dsp_ecep_command.param.channel)
                     {  
                         case left:
@@ -271,6 +282,7 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_FETCH_CEN_FREQ_AMP: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_CEN_FREQ_AMP received");
                     switch(dsp_ecep_command.param.channel)
                     {  
                         case left:
@@ -294,6 +306,7 @@ void dsp_ecep_handler_task()
                     break;
 
                 case ECEP_CMD_SET_MIC_RANGE: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_MIC_RANGE received");
                     // Check for valid param:
                     hw_gain_stage_temp = dsp_ecep_command.param.range;
                     if((hw_gain_stage_temp != up_to_90dB_SPL) && (hw_gain_stage_temp != up_to_120dB_SPL))
@@ -305,10 +318,12 @@ void dsp_ecep_handler_task()
 
                     // Execute command:
                     gs_hw_gain_stage = hw_gain_stage_temp;
+                    // !!! HUSK !!! OGSÅ ÆNDRE MIC STAGEN MED HARDWARE GPIO !!!
                     send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_SET_MIC_RANGE);
                     break;
 
                 case ECEP_CMD_FETCH_MIC_RANGE: 
+                    ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_MIC_RANGE received");
                     // Execute command:
                     send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_MIC_RANGE);
                     send_ecep_evnt_mic_range(gs_hw_gain_stage);

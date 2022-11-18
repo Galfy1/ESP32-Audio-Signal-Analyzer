@@ -13,7 +13,7 @@
 void ecep_packet_handler_task();
 void ecep_uart_event_task();
 
-void ecep_uart_init();
+void ecep_uart_init(QueueHandle_t xQueue_pr_ecep_cmds, QueueHandle_t xQueue_dsp_ecep_cmds);
 
 
 
@@ -34,5 +34,6 @@ void send_ecep_evnt_L_fft_res();
 void send_ecep_evnt_R_fft_res();
 void send_ecep_evnt_L_adc_raw();
 void send_ecep_evnt_R_adc_raw();
+void send_ecep_evnt_pong();
 
 #endif /*ECEP_UART_H_INCLUDED */
