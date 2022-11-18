@@ -42,8 +42,10 @@ This project is created for the ESP32-S3 \
 - SPI RAM access method: "Make RAM allocatable using heap_caps_malloc(..., MALLOC_CAP_SPIRAM)" (default: "Make RAM allocatable using malloc() as well") \
 
 ## Used GPIO's
-- IO10: UART1 TX 
-- IO11: UART1 RX
+- IO10: UART1 TX (debug terminal)
+- IO11: UART1 RX (debug terminal)
+- IO05: Gain stage multiplexer for left audio channel
+- IO04: Gain stage multiplexer for right audio channel
 - IO30: PSRAM CLK IO number (The default. Can be changed in menuconfig if needed) 
 - IO26: PSRAM CS IO number (The default. Can be changed in menuconfig if needed) 
 

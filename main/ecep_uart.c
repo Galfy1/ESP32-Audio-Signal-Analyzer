@@ -29,7 +29,7 @@ static const char *TAG = "ecep_uart.c";
 #define UART_RD_BUF_SIZE  BUF_SIZE
 
 static QueueHandle_t ecep_uart_queue;     // Queue for uart api
-static QueueHandle_t ecep_data_len_que;   // Queue used to syncronize ecep_packet_handler_task() from ecep_uart_event_task()
+static QueueHandle_t ecep_data_len_que;   // Queue used to syncronize ecep_rx_packet_handler_task() from ecep_uart_event_task()
 
 static QueueHandle_t gs_xQueue_ecep_events;   // Queue for ECEP events 
 static QueueHandle_t gs_xQueue_pr_ecep_cmds;  // Queue for Patient Response ECEP commands
@@ -45,13 +45,20 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
     //     ESP_LOGI(TAG, "0x%04x", pv_params_and_bulk[i]);
     // }
 
+    /* Note : No command currently uses bulk data
+                (if bulk data for a command is needed in the future, add a Queue or Mutex protetected Shared Memory to pass to the relevenat task.
+                for now: no need to have allocated shamed memory for bulk data if no command uses it.
+                ECEP_MAX_CMD_PACKET_LEN would also have to be increase if the new packet with bulk exceeds this size. consider creating the u8_packet_data array 
+                in PSRAM if the size gets too big)
+    */
+
     sIntern_command_setup_t sIntern_command_setup;
 
     switch(u8_command_code)
     {
         case ECEP_CMD_FETCH_FFT:
 
-            if(u8_params_and_bulk_len != sizeof(eAudio_channel_t))
+            if(u8_params_and_bulk_len != sizeof(uint8_t))
             {
                 // Something went wrong. 
                 ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -59,7 +66,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
             }
 
             sIntern_command_setup.u8_id = u8_command_code;
-            sIntern_command_setup.param.channel = *((eAudio_channel_t *) pv_params_and_bulk);
+            sIntern_command_setup.param.channel = *((uint8_t *) pv_params_and_bulk);
 
             if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
             {
@@ -69,7 +76,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
 
         case ECEP_CMD_SET_FFT_OUTP_FORM:
 
-            if(u8_params_and_bulk_len != sizeof(eFFT_output_form_t))
+            if(u8_params_and_bulk_len != sizeof(uint8_t))
             {
                 // Something went wrong.
                 ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -77,7 +84,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
             }
 
             sIntern_command_setup.u8_id = u8_command_code;
-            sIntern_command_setup.param.fft_output_format = *((eFFT_output_form_t *) pv_params_and_bulk);
+            sIntern_command_setup.param.fft_output_format = *((uint8_t *) pv_params_and_bulk);
 
             if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
             {
@@ -87,7 +94,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
 
         case ECEP_CMD_SET_FFT_WIND_TYPE:
 
-            if(u8_params_and_bulk_len != sizeof(eFFT_window_type_t))
+            if(u8_params_and_bulk_len != sizeof(uint8_t))
             {
                 // Something went wrong. 
                 ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -95,7 +102,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
             }
 
             sIntern_command_setup.u8_id = u8_command_code;
-            sIntern_command_setup.param.fft_window = *((eFFT_window_type_t *) pv_params_and_bulk);
+            sIntern_command_setup.param.fft_window = *((uint8_t *) pv_params_and_bulk);
 
             if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
             {
@@ -123,7 +130,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
 
         case ECEP_CMD_SET_WIND_CORR_FACTOR:
 
-            if(u8_params_and_bulk_len != sizeof(eFFT_wind_corr_factor_t))
+            if(u8_params_and_bulk_len != sizeof(uint8_t))
             {
                 // Something went wrong.
                 ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -131,7 +138,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
             }
 
             sIntern_command_setup.u8_id = u8_command_code;
-            sIntern_command_setup.param.fft_win_corr_factor = *((eFFT_wind_corr_factor_t *) pv_params_and_bulk);
+            sIntern_command_setup.param.fft_win_corr_factor = *((uint8_t *) pv_params_and_bulk);
 
             if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
             {
@@ -176,7 +183,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
 
         case ECEP_CMD_FETCH_ADC_RAW_DATA:
 
-            if(u8_params_and_bulk_len != sizeof(eAudio_channel_t))
+            if(u8_params_and_bulk_len != sizeof(uint8_t))
             {
                 // Something went wrong.
                 ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -184,7 +191,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
             }
 
             sIntern_command_setup.u8_id = u8_command_code;
-            sIntern_command_setup.param.channel = *((eAudio_channel_t *) pv_params_and_bulk);
+            sIntern_command_setup.param.channel = *((uint8_t *) pv_params_and_bulk);
 
             if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
             {
@@ -194,7 +201,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
 
         case ECEP_CMD_FETCH_CEN_FREQ:
 
-            if(u8_params_and_bulk_len != sizeof(eAudio_channel_t))
+            if(u8_params_and_bulk_len != sizeof(uint8_t))
             {
                 // Something went wrong.
                 ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -202,7 +209,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
             }
 
             sIntern_command_setup.u8_id = u8_command_code;
-            sIntern_command_setup.param.channel = *((eAudio_channel_t *) pv_params_and_bulk);
+            sIntern_command_setup.param.channel = *((uint8_t *) pv_params_and_bulk);
 
             if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
             {
@@ -212,7 +219,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
 
         case ECEP_CMD_FETCH_CEN_FREQ_AMP:
 
-            if(u8_params_and_bulk_len != sizeof(eAudio_channel_t))
+            if(u8_params_and_bulk_len != sizeof(uint8_t))
             {
                 // Something went wrong.
                 ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -220,7 +227,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
             }
 
             sIntern_command_setup.u8_id = u8_command_code;
-            sIntern_command_setup.param.channel = *((eAudio_channel_t *) pv_params_and_bulk);
+            sIntern_command_setup.param.channel = *((uint8_t *) pv_params_and_bulk);
 
             if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
             {
@@ -230,7 +237,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
 
         case ECEP_CMD_SET_MIC_RANGE:
 
-            if(u8_params_and_bulk_len != sizeof(eFFT_hw_gain_stage_t))
+            if(u8_params_and_bulk_len != sizeof(uint8_t))
             {
                 // Something went wrong.
                 ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -238,7 +245,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
             }
 
             sIntern_command_setup.u8_id = u8_command_code;
-            sIntern_command_setup.param.range = *((eFFT_hw_gain_stage_t *) pv_params_and_bulk);
+            sIntern_command_setup.param.range = *((uint8_t *) pv_params_and_bulk);
 
             if(xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
             {
@@ -335,7 +342,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
 
         case ECEP_CMD_SET_PR_DEF_STATE:
 
-            if(u8_params_and_bulk_len != sizeof(eRelay_state_t))
+            if(u8_params_and_bulk_len != sizeof(uint8_t))
             {
                 // Something went wrong. 
                 ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -343,7 +350,7 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
             }
 
             sIntern_command_setup.u8_id = u8_command_code;
-            sIntern_command_setup.param.relay_state = *((eRelay_state_t *) pv_params_and_bulk);
+            sIntern_command_setup.param.relay_state = *((uint8_t *) pv_params_and_bulk);
 
             if(xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
             {
@@ -382,12 +389,12 @@ static void ecep_command_handler(uint8_t u8_command_code, void * pv_params_and_b
 
 }
 
-void ecep_packet_handler_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task() I STEDET. Eller noget lignende.
+void ecep_rx_packet_handler_task() 
 {
     uint32_t u32_data_len = 0; 
     uint8_t au8_raw_uart_copy[UART_RD_BUF_SIZE];
 
-    uint8_t  u8_packet_data[ECEP_MAX_CMD_PACKET_LEN];    // DET HER GIGA ARRAY GØR MÅSKE AT TASKEN LØBER TØR FOR STACK PLADS... ELLERS MÅSKE PLACER I PSRAM
+    uint8_t  u8_packet_data[ECEP_MAX_CMD_PACKET_LEN];   // This array is small enough that we dont need to place it in PSRAM
     uint32_t u32_package_byte_counter = 0; 
 
     uint32_t byte_counter;
@@ -404,17 +411,12 @@ void ecep_packet_handler_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task()
     {
         if(xQueueReceive(ecep_data_len_que, (void *)&u32_data_len, portMAX_DELAY))
         {
-
-            ESP_LOGI(TAG, "Uart wee :D");
-
             // Take a copy of the shared memory:
             if(xSemaphoreTake(gs_raw_uart_shr_mem_sem, portMAX_DELAY) == pdTRUE)
             {
                memcpy(au8_raw_uart_copy, gs_au8_raw_uart_shr, sizeof(au8_raw_uart_copy)); 
                xSemaphoreGive(gs_raw_uart_shr_mem_sem);     
-        }
-
-
+            }
 
             // Assemble ECEP package from uart data:
 
@@ -474,14 +476,13 @@ void ecep_packet_handler_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task()
                     u32_package_byte_counter += chunk_size_to_cpy;
                     byte_counter += chunk_size_to_cpy;
 
-                    ESP_LOGE(TAG, "u32_package_byte_counter 2: %i", (int) u32_package_byte_counter);
+                    //ESP_LOGE(TAG, "u32_package_byte_counter 2: %i", (int) u32_package_byte_counter);
                 }
 
 
                 if((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter == u16_packet_len)) // Packet assembly complete
                 {
-                    ESP_LOGI(TAG, "Jamen Okay da ASDASD");
-
+                    //ESP_LOGI(TAG, "Jamen Okay da ASDASD");
                     ecep_command_handler(u8_command_code, &u8_packet_data[4], u16_packet_len - ECEP_HEADER_LEN); // Pass packet without header
 
                     // Reset Package byte counter and data:
@@ -490,32 +491,13 @@ void ecep_packet_handler_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task()
                 }
 
             }
-
-
-
-
-
-
-
-
-
-            //     // DEN HER KOMMENTAR SKAL MÅSKE STÅ I CMD HANDLERE I STEDET. IDK:
-            //     /* Bulk data is discarded since no command uses bulk data
-            //         (if bulk data for a command is needed in the future, add a Queue or Mutex protetected Shared Memory to pass to the relevenat task.
-            //          for now: no need to have allocated shamed memory for bulk data if no command uses it.
-            //          ECEP_MAX_CMD_PACKET_LEN would also have to be increase if the new packet with bulk exceeds this size. consider creating the u8_packet_data array 
-            //          in PSRAM if the size gets too big)
-            //     */
-
-
-
         }
     }
 }
 
 
 //Note: "uart events" refeers to the esp uart api. Dont confuse this "event" with ECEP events.
-void ecep_uart_event_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task() I STEDET. Eller noget lignende.
+void ecep_uart_event_task() 
 {
     uart_event_t event;
 
@@ -537,9 +519,9 @@ void ecep_uart_event_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task() I S
                     // Error check: 
                     if(uxQueueMessagesWaiting(ecep_data_len_que))
                     {
-                        // ecep_packet_handler_task() missed the data stored in gs_au8_raw_uart_shr (it was too slow to handle the previous uart data)
+                        // ecep_rx_packet_handler_task() have missed the data stored in gs_au8_raw_uart_shr (it was too slow to handle the previous uart data)
                         // Packets are now unsyncronized. Trying to fix by restarting.
-                        ESP_LOGE(TAG, "ERROR: ecep_packet_handler_task() missed the uart data stored in gs_au8_raw_uart_shr... Restarting");
+                        ESP_LOGE(TAG, "ERROR: ecep_rx_packet_handler_task() missed the uart data stored in gs_au8_raw_uart_shr... Restarting");
                         esp_restart(); 
                     }
 
@@ -551,7 +533,7 @@ void ecep_uart_event_task() // MÅSKE KALD DEN ecep_rx_packet_handler_task() I S
                         xSemaphoreGive(gs_raw_uart_shr_mem_sem);
                     }
 
-                    // Trigger ecep_packet_handler_task():
+                    // Trigger ecep_rx_packet_handler_task():
                     if (xQueueSend(ecep_data_len_que, (void *)&event.size, (TickType_t)10) != pdPASS)
                     {
                         ESP_LOGE(TAG, "ERROR: while sending to ecep_data_len_que queue");

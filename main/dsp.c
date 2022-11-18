@@ -7,6 +7,7 @@
 #include "freertos/semphr.h"
 
 #include "esp_log.h"
+#include "driver/gpio.h"
 #include "esp_dsp.h" // FOR TEST
 
 #include "dsp.h"
@@ -18,6 +19,12 @@
 static const char *DSP_TAG = "DSP.C";
 
 #define RADIX_USED              radix4             // eFFT_radix_type_t      (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
+
+// For hardware gain stage gpio multiplexing:
+#define GPIO_NUM_RANGE_SWITCH_L     5                  // Used to multiplex between the two hardware gain stages for left audio channel
+#define GPIO_NUM_RANGE_SWITCH_R     4                  // Used to multiplex between the two hardware gain stages for left audio channel
+#define GPIO_LVL_UP_TO_90DB         GPIO_LOW           // GPIO level used to select the "up to 90dB" hardware gain stage
+#define GPIO_LVL_UP_TO_120DB        GPIO_HIGH          // GPIO level used to select the "up to 120dB" hardware gain stage        
 
 // Default user settings:
 #define DFLT_FFT_OUTPUT_FORMAT  ampltitude_dB_SPL  // eFFT_output_form_t     Default output format
@@ -69,6 +76,24 @@ static void calc_fft_duration_ms()
     gs_u32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt * 1000.0; // *1000 to get in ms
 }
 
+// IKKE TESTET:
+static void set_hw_gain_stage_gpios(eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+{
+    switch(eFFT_hw_gain_stage)
+    {
+        case up_to_90dB_SPL: 
+            gpio_set_level(GPIO_NUM_RANGE_SWITCH_L, GPIO_LVL_UP_TO_90DB);
+            gpio_set_level(GPIO_NUM_RANGE_SWITCH_R, GPIO_LVL_UP_TO_90DB);
+            break;
+        case up_to_120dB_SPL:
+            gpio_set_level(GPIO_NUM_RANGE_SWITCH_L, GPIO_LVL_UP_TO_120DB);
+            gpio_set_level(GPIO_NUM_RANGE_SWITCH_R, GPIO_LVL_UP_TO_120DB);
+            break;
+        default:
+            ESP_LOGE(DSP_TAG, "ERROR: Invalid hw gain stage value");
+            break;
+    }
+}
 
 static void find_cent_freq(float * array, int32_t array_size, uint32_t * p_cent_freq_hz, float * p_cent_freq_val)
 {
@@ -318,7 +343,7 @@ void dsp_ecep_handler_task()
 
                     // Execute command:
                     gs_hw_gain_stage = hw_gain_stage_temp;
-                    // !!! HUSK !!! OGSÅ ÆNDRE MIC STAGEN MED HARDWARE GPIO !!!
+                    set_hw_gain_stage_gpios(gs_hw_gain_stage);
                     send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_SET_MIC_RANGE);
                     break;
 
@@ -357,8 +382,8 @@ void dsp_left_ch_task()
 
     uint32_t ret;
 
-    uint32_t testy_counter = 0;
-    uint32_t testy_sum = 0;
+    // uint32_t testy_counter = 0;
+    // uint32_t testy_sum = 0;
 
     while(1)
     {  
@@ -497,6 +522,7 @@ void dsp_right_ch_task()
 }
 
 
+
 void dsp_init(float * pf32_adc1_shared, 
               float * pf32_adc2_shared, 
               SemaphoreHandle_t adc1_shared_mem_sem, 
@@ -519,8 +545,18 @@ void dsp_init(float * pf32_adc1_shared,
 
     gs_xQueue_dsp_ecep_cmds = xQueue_dsp_ecep_cmds;
 
-    calc_fft_duration_ms();
+    // GPIO setup for hardware gain stage multiplexing:
+    gpio_config_t io_conf = {
+        .pin_bit_mask = ((1<<GPIO_NUM_RANGE_SWITCH_L) | (1<<GPIO_NUM_RANGE_SWITCH_R)), 
+        .intr_type = GPIO_INTR_DISABLE, // disable interrupts.
+        .mode = GPIO_MODE_INPUT_OUTPUT, // Set as output/input mode.
+        .pull_down_en = GPIO_PULLDOWN_DISABLE, // Disable pull up.
+        .pull_up_en = GPIO_PULLUP_ENABLE, // Disable pull down.
+    };
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+    set_hw_gain_stage_gpios(DFLT_HW_GAIN_STAGE);
 
+    // Miscellaneous setup:
+    calc_fft_duration_ms();
     fft_wrapper_init_tech3(gs_window_used);
-    // SÆT HW GAIN STAGE GPIO TIL HVAD END DEFAULT_HW_G_STAGE ER
 }
