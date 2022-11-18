@@ -8,10 +8,16 @@
 #define ECEP_MAX_CMD_PACKET_LEN 1000                                        // Max packet length for an event packet in bytes. 
                                                                                         /* (value is arbitrarily chosen. Is simply has to be at least the size of the largest command package.
                                                                                            No command package is currently over 1000 bytes in size.) */
-#define ECEP_MAX_EVNT_PACKET_LEN  ECEP_HEADER_LEN + (sizeof(float) * DATA_BLOCK_SIZE)   // Max packet length for an event packet in bytes.
+#define ECEP_MAX_EVNT_PACKET_LEN        ECEP_HEADER_LEN + (sizeof(float) * DATA_BLOCK_SIZE)   // Max packet length for an event packet in bytes.
                                                                                         // (chosen by biggest Event. In this case: Left/Right ADC Raw data event)
 
 #define ECEP_PACKET_TYPE 0x42
+
+
+#define TX_PACKET_TYPE_BYTE             0
+#define TX_PACKET_CMD_EVNT_BYTE         1
+#define TX_PACKET_PACK_LEN_LOW_BYTE     2
+#define TX_PACKET_PACK_LEN_HIGH_BYTE    3
 
 
 // ---------------------------- Command/Event IDs  ----------------------------

@@ -98,7 +98,16 @@ void app_main(void)
 
     patient_resp_init(xQueue_pr_ecep_cmds);
 
-    ecep_uart_init();
+    ecep_uart_init(
+        pf32_adc1_shared, 
+        pf32_adc2_shared, 
+        adc1_shared_mem_sem, 
+        adc2_shared_mem_sem,
+        pf32_L_fft_res_shr,
+        pf32_R_fft_res_shr,
+        fft_L_res_shr_mem_sem,
+        fft_R_res_shr_mem_sem
+    );
 
     // Create tasks:
     // FIND LIGE UD AF MED DE PRIORITETER HER... ADCEN tasken skal nok have højeste priroritet! 
@@ -111,7 +120,7 @@ void app_main(void)
     adc_set_dsp_task_handles(dsp_left_task_handle, dsp_right_task_handle);  /* Give the handles of the dsp tasks to the adc task.
                                                                                This is done so the adc task can use direct task notification to syncronize use of the shared memory */
     xTaskCreatePinnedToCore(adc_task, "adc_task", 4096, NULL, 8, NULL, 1); // Use core 1 . ADC task needs the higher priority compared to other tasks
-    xTaskCreatePinnedToCore(dummy_task, "dummy_task", 4096, NULL, 4, NULL, 1); // Use core 1. 
+    // xTaskCreatePinnedToCore(dummy_task, "dummy_task", 4096, NULL, 4, NULL, 1); // Use core 1. 
     xTaskCreatePinnedToCore(patient_resp_task, "patient_resp_task", 4096, NULL, 4, NULL, 1); // Use core 1.     
     xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);
     xTaskCreatePinnedToCore(ecep_uart_tx_task, "ecep_uart_tx_task", 4096, NULL, 4, NULL, 1); // set up packet and transmit through UART
