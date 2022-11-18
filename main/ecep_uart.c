@@ -476,6 +476,9 @@ void ecep_uart_tx_task()
 
             case ECEP_EVNT_PONG:
 
+                // Ping reply, Event packet only containts header (4 bytes).
+                ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_PONG, packet_len);
+
                 break;
 
             default:
