@@ -306,7 +306,8 @@ void ecep_uart_tx_task()
 {
 
     // Packet:
-    // | Header (4 bytes) | Cmd/Evt param struct | Bulk data |
+    // |   Header   |   Cmd/Evt param struct   |   Bulk data   |
+    //    (4 bytes)           (differ)              (differ)
 
     sIntern_event_setup_t ecep_event;
     uint16_t packet_len = 0;
@@ -318,12 +319,16 @@ void ecep_uart_tx_task()
     }
     memset(pu8_tx_packet_buf, 0, ECEP_MAX_EVNT_PACKET_LEN);
 
-    send_ecep_evnt_cmd_status(ECEP_FAIL, ECEP_CMD_FETCH_PR_DEF_STATE);
-
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    sIntern_event_setup_t ecep_init_event;
+    ecep_init_event.u8_id = ECEP_EVNT_LEFT_CEN_FREQ_AMP;
+    ecep_init_event.param.f32_cen_freq_amp = 1234.1234;
+    // send_ecep_evnt_cmd_status(ECEP_FAIL, ECEP_CMD_FETCH_PR_DEF_STATE); // Temporary for testing purposes.
+    // send_ecep_evnt_pr_def_state(norm_open);
+    // vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     while (1)
     {
+
         if( xQueueReceive(gs_xQueue_ecep_events, &ecep_event, 0) == pdTRUE)
         {
             packet_len = ECEP_HEADER_LEN;
@@ -332,7 +337,9 @@ void ecep_uart_tx_task()
             {
                 case ECEP_EVNT_COMMAND_STATUS:
 
-                    packet_len += sizeof(uint8_t) * 2;
+                    ESP_LOGI(TAG, "Entered ECEP_EVNT_COMMAND_STATUS");
+
+                    packet_len += sizeof(uint8_t) * 2;  // Total of 6 bytes
 
                     ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_COMMAND_STATUS, packet_len);
                     pu8_tx_packet_buf[4] = (uint8_t) ecep_event.param.status_event.u8_parent_cmd_id;
@@ -350,25 +357,28 @@ void ecep_uart_tx_task()
 
                 case ECEP_EVNT_FFT_STGS:
 
-                    packet_len += sizeof(uint8_t) * 4;
+                    packet_len += sizeof(uint8_t) * 3 + sizeof(uint32_t); // Total of 11 bytes
 
                     ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_FFT_STGS, packet_len);
                     pu8_tx_packet_buf[4] = (uint8_t) ecep_event.param.FFT_stgs.fft_output_format;
                     pu8_tx_packet_buf[5] = (uint8_t) ecep_event.param.FFT_stgs.fft_window;
-                    pu8_tx_packet_buf[6] = (uint8_t) ecep_event.param.FFT_stgs.u32_fft_res_avg_count;
-                    pu8_tx_packet_buf[7] = (uint8_t) ecep_event.param.FFT_stgs.fft_corr_factor;
+                    pu8_tx_packet_buf[6] = (uint8_t) ecep_event.param.FFT_stgs.fft_corr_factor;
+                    memcpy(pu8_tx_packet_buf[7], &ecep_event.param.FFT_stgs.u32_fft_res_avg_count, sizeof(uint32_t));
+                    // pu8_tx_packet_buf[6] = (uint8_t) ecep_event.param.FFT_stgs.u32_fft_res_avg_count;
                     
                     break;
 
                 case ECEP_EVNT_FFT_TOT_DUR:
 
-                    packet_len += sizeof(uint32_t);
+                    packet_len += sizeof(uint32_t);     // Total of 8 bytes
 
                     ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_FFT_TOT_DUR, packet_len);
-                    pu8_tx_packet_buf[4] = (uint8_t) packet_len & 0x00FF; 
-                    pu8_tx_packet_buf[5] = (uint8_t) (packet_len & 0xFF00) >> 8;
-                    pu8_tx_packet_buf[6] = (uint8_t) (packet_len & 0xFF00) >> 16;
-                    pu8_tx_packet_buf[7] = (uint8_t) (packet_len & 0xFF00) >> 24;
+                    memcpy(pu8_tx_packet_buf[4], &ecep_event.param.u32_time, sizeof(uint32_t));
+
+                    // pu8_tx_packet_buf[4] = (uint8_t) (ecep_event.param.u32_time & 0x000000FF); 
+                    // pu8_tx_packet_buf[5] = (uint8_t) (ecep_event.param.u32_time & 0x0000FF00) >> 8;
+                    // pu8_tx_packet_buf[6] = (uint8_t) (ecep_event.param.u32_time & 0x00FF0000) >> 16;
+                    // pu8_tx_packet_buf[7] = (uint8_t) (ecep_event.param.u32_time & 0xFF000000) >> 24;
                     
                     break;
 
@@ -380,16 +390,73 @@ void ecep_uart_tx_task()
 
                     break;
 
-                case ECEP_EVNT_CEN_FREQ:
+                case ECEP_EVNT_LEFT_CEN_FREQ:
+                    
+                    packet_len += sizeof(uint32_t);     // Total of 8 bytes
+
+                    ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_LEFT_CEN_FREQ, packet_len);
+                    memcpy(pu8_tx_packet_buf[4], &ecep_event.param.u32_cen_freq_hz, sizeof(uint32_t));
+
+                    // pu8_tx_packet_buf[4] = (uint8_t) (ecep_event.param.u32_cen_freq_hz & 0x000000FF); 
+                    // pu8_tx_packet_buf[5] = (uint8_t) (ecep_event.param.u32_cen_freq_hz & 0x0000FF00) >> 8;
+                    // pu8_tx_packet_buf[6] = (uint8_t) (ecep_event.param.u32_cen_freq_hz & 0x00FF0000) >> 16;
+                    // pu8_tx_packet_buf[7] = (uint8_t) (ecep_event.param.u32_cen_freq_hz & 0xFF000000) >> 24;
 
                     break;
 
-                case ECEP_EVNT_CEN_FREQ_AMP:
+                case ECEP_EVNT_RIGHT_CEN_FREQ:
 
+                    packet_len += sizeof(uint32_t);     // Total of 8 bytes
+
+                    ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_RIGHT_CEN_FREQ, packet_len);
+                    memcpy(pu8_tx_packet_buf[4], &ecep_event.param.u32_cen_freq_hz, sizeof(uint32_t));
+
+                    // pu8_tx_packet_buf[4] = (uint8_t) (ecep_event.param.u32_cen_freq_hz & 0x000000FF); 
+                    // pu8_tx_packet_buf[5] = (uint8_t) (ecep_event.param.u32_cen_freq_hz & 0x0000FF00) >> 8;
+                    // pu8_tx_packet_buf[6] = (uint8_t) (ecep_event.param.u32_cen_freq_hz & 0x00FF0000) >> 16;
+                    // pu8_tx_packet_buf[7] = (uint8_t) (ecep_event.param.u32_cen_freq_hz & 0xFF000000) >> 24;
+
+                    break;
+
+                case ECEP_EVNT_LEFT_CEN_FREQ_AMP:
+
+                    packet_len += sizeof(float);    // Total of 8 bytes
+
+                    ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_LEFT_CEN_FREQ_AMP, packet_len);
+                    memcpy(pu8_tx_packet_buf[4], &ecep_event.param.f32_cen_freq_amp, sizeof(float));
+
+                    break;
+
+                case ECEP_EVNT_RIGHT_CEN_FREQ_AMP:
+
+                    packet_len += sizeof(float);    // Total of 8 bytes
+
+                    ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_RIGHT_CEN_FREQ_AMP, packet_len);
+                    memcpy(pu8_tx_packet_buf[4], &ecep_event.param.f32_cen_freq_amp, sizeof(float));
+
+                    // pu8_tx_packet_buf[4] = (uint8_t) (ecep_event.param.f32_cen_freq_amp & 0x000000FF); 
+                    // pu8_tx_packet_buf[5] = (uint8_t) (ecep_event.param.f32_cen_freq_amp & 0x0000FF00) >> 8;
+                    // pu8_tx_packet_buf[6] = (uint8_t) (ecep_event.param.f32_cen_freq_amp & 0x00FF0000) >> 16;
+                    // pu8_tx_packet_buf[7] = (uint8_t) (ecep_event.param.f32_cen_freq_amp & 0xFF000000) >> 24;
+
+                    break;
+
+                case ECEP_EVNT_MIC_RANGE:
+
+                    packet_len += sizeof(uint8_t);      // Total of 5 bytes
+
+                    ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_MIC_RANGE, packet_len);
+                    pu8_tx_packet_buf[4] = (uint8_t) ecep_event.param.range;
+                    
                     break;
 
                 case ECEP_EVNT_PR_DEF_STATE:
 
+                    packet_len += sizeof(uint8_t);      // Total of 5 bytes
+
+                    ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_PR_DEF_STATE, packet_len);
+                    pu8_tx_packet_buf[4] = (uint8_t) ecep_event.param.pr_default;
+                    
                     break;
 
                 case ECEP_EVNT_PONG:
@@ -399,18 +466,16 @@ void ecep_uart_tx_task()
                 default:
                     break;
 
-                uart_write_bytes(UART_NUM_0, pu8_tx_packet_buf, packet_len);
 
             }
+
+            uart_write_bytes(UART_NUM_0, pu8_tx_packet_buf, packet_len);
+
         }
+
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 
-    // static const char *TX_TASK_TAG = "TX_TASK";
-    // esp_log_level_set(TX_TASK_TAG, ESP_LOG_INFO);
-    // while (1) {
-    //     sendData(TX_TASK_TAG, "Hello world\n");
-    //     vTaskDelay(2000 / portTICK_PERIOD_MS);
-    // }
 }
 
 

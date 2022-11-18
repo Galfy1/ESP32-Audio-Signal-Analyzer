@@ -45,10 +45,13 @@
 #define ECEP_EVNT_FFT_TOT_DUR               0x05
 #define ECEP_EVNT_LEFT_ADC_RAW              0x06
 #define ECEP_EVNT_RIGHT_ADC_RAW             0x07
-#define ECEP_EVNT_CEN_FREQ                  0x08
-#define ECEP_EVNT_CEN_FREQ_AMP              0x09
-#define ECEP_EVNT_PR_DEF_STATE              0x0A
-#define ECEP_EVNT_PONG                      0x0B
+#define ECEP_EVNT_LEFT_CEN_FREQ             0x08   
+#define ECEP_EVNT_RIGHT_CEN_FREQ            0x09   
+#define ECEP_EVNT_LEFT_CEN_FREQ_AMP         0x0A  
+#define ECEP_EVNT_RIGHT_CEN_FREQ_AMP        0x0B  
+#define ECEP_EVNT_MIC_RANGE                 0x0C
+#define ECEP_EVNT_PR_DEF_STATE              0x0D
+#define ECEP_EVNT_PONG                      0x0E
 
 
 
@@ -152,9 +155,9 @@ typedef union uEvent_parameters
 {
     sStatus_event_t status_event;    // Burde den ikke hedde command status? Det er vel underforstået at det er et event siden den ligger i en EVNT_param union. (også så den matcher event ID navnet)
     sFFT_stgs_t FFT_stgs;
-    uint32_t u32_time;
+    uint32_t u32_time;               // Time in ms
     uint32_t u32_cen_freq_hz;
-    uint32_t u32_cen_freq_amp;
+    float f32_cen_freq_amp;
     eFFT_hw_gain_stage_t range;   // Måske hedde mic_range i stedet? 
     eRelay_state_t pr_default;  
 } uEVNT_params_t;

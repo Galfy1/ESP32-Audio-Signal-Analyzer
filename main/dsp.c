@@ -284,7 +284,7 @@ void dsp_left_ch_task()
             memset(gs_pf32_adc1_shared, 0, sizeof(gs_af32_adc1_temp_buf));  // Reset the shared memory, just to be sure (gs_af32_adc1_temp_buf is same size as shared space array)
             xSemaphoreGive(gs_adc1_shared_mem_sem);
             
-            ESP_LOGI(DSP_TAG, "ADC1 Read Voltage: %f" , gs_af32_adc1_temp_buf[0]);
+            // ESP_LOGI(DSP_TAG, "ADC1 Read Voltage: %f" , gs_af32_adc1_temp_buf[0]);
             
             // for(int32_t i = 0 ; i <= DATA_BLOCK_SIZE ; i += 1)
             // {
