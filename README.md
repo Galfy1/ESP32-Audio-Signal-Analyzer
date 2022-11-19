@@ -11,9 +11,11 @@ ASD
     2. Run "git submodule update" git command
 3. Run the following command from the vscode command pallette (Ctrl-Shift-P):
     1. ESP-IDF: Add vscode configuration folder
-4. Use the Espressif IDF extension bar at the buttom of VS Code to build and flash. Monitoring via the "USB-to-UART" port on the ESP32-S3-DevKitC-1 is not possible for this project since UART0 is repurposed for ECEP (a custom command event protocol). For monitoring / debug-console please use GPIO ASD(RX) and GPIO ASD(TX).
+4. Use the Espressif IDF extension bar at the buttom of VS Code to build and flash. Monitoring via the "USB-to-UART" port on the ESP32-S3-DevKitC-1 is not possible for this project since UART0 is repurposed for ECEP (a custom command event protocol). For monitoring / debug-console via the uart please use GPIO 11(RX) and GPIO 10(TX).
  
-(An alternative to step 1 and 2 is to pass --recurse-submodules to the git clone command. This will automatically initialize and update each submodule in the repository)
+(An alternative to step 1 and 2 is to pass --recurse-submodules to the git clone command. This will automatically initialize and update each submodule in the repository) \
+
+Note: "git submodule update --remote" git command can be used to fetch and merge newest changes for the submodules.
 
 ## Required Hardware
 This project is created for the ESP32-S3 \
@@ -40,8 +42,10 @@ This project is created for the ESP32-S3 \
 - SPI RAM access method: "Make RAM allocatable using heap_caps_malloc(..., MALLOC_CAP_SPIRAM)" (default: "Make RAM allocatable using malloc() as well") \
 
 ## Used GPIO's
-- IO10: UART1 TX
-- IO11: UART1 RX
+- IO10: UART1 TX (debug terminal)
+- IO11: UART1 RX (debug terminal)
+- IO05: Gain stage multiplexer for left audio channel
+- IO04: Gain stage multiplexer for right audio channel
 - IO30: PSRAM CLK IO number (The default. Can be changed in menuconfig if needed) 
 - IO26: PSRAM CS IO number (The default. Can be changed in menuconfig if needed) 
 

@@ -7,6 +7,7 @@
 #include "freertos/semphr.h"
 
 #include "esp_log.h"
+#include "driver/gpio.h"
 #include "esp_dsp.h" // FOR TEST
 
 #include "dsp.h"
@@ -19,6 +20,12 @@ static const char *DSP_TAG = "DSP.C";
 
 #define RADIX_USED radix4 // eFFT_radix_type_t      (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
 
+// For hardware gain stage gpio multiplexing:
+#define GPIO_NUM_RANGE_SWITCH_L 5      // Used to multiplex between the two hardware gain stages for left audio channel
+#define GPIO_NUM_RANGE_SWITCH_R 4      // Used to multiplex between the two hardware gain stages for left audio channel
+#define GPIO_LVL_UP_TO_90DB GPIO_LOW   // GPIO level used to select the "up to 90dB" hardware gain stage
+#define GPIO_LVL_UP_TO_120DB GPIO_HIGH // GPIO level used to select the "up to 120dB" hardware gain stage
+
 // Default user settings:
 #define DFLT_FFT_OUTPUT_FORMAT ampltitude_dB_SPL // eFFT_output_form_t     Default output format
 #define DFLT_WIND_USED hann                      // eFFT_window_type_t     Default window type
@@ -30,10 +37,10 @@ static const char *DSP_TAG = "DSP.C";
 eFFT_output_form_t gs_fft_out_format = DFLT_FFT_OUTPUT_FORMAT;
 eFFT_window_type_t gs_window_used = DFLT_WIND_USED;
 int32_t gs_i32_fft_avg_max_cnt = DFLT_FFT_AVG_MAX_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
-eFFT_hw_gain_stage_t gs_hw_gain_stage = DFLT_HW_GAIN_STAGE;
 eFFT_wind_corr_factor_t gs_wind_corr_factor = DFLT_WIND_CORR_FACTOR;
+eFFT_hw_gain_stage_t gs_hw_gain_stage = DFLT_HW_GAIN_STAGE;
 
-float gs_f32_total_fft_dur_ms; // The total duration of the averaged FFT result in ms
+uint32_t gs_u32_total_fft_dur_ms; // The total duration of the averaged FFT result in ms
 
 static float *gs_pf32_adc1_shared;
 static float *gs_pf32_adc2_shared;
@@ -54,9 +61,9 @@ __attribute__((aligned(16))) static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE]
 __attribute__((aligned(16))) static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};
 
 // Stores the latest center frequency indexes and values:
-static int32_t gs_i32_L_cent_freq_idx;
+static uint32_t gs_u32_L_cent_freq_hz;
+static uint32_t gs_u32_R_cent_freq_hz;
 static float gs_f32_L_cent_freq_val;
-static int32_t gs_i32_R_cent_freq_idx;
 static float gs_f32_R_cent_freq_val;
 
 // For Spectral Estimation: Welch's method is used with 0% overlap
@@ -64,18 +71,29 @@ static float gs_f32_R_cent_freq_val;
 // IKKE TESTET:
 static void calc_fft_duration_ms()
 {
-    gs_f32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * 1000.0 * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt;
+    gs_u32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt * 1000.0; // *1000 to get in ms
 }
 
-/**
- * @brief
- *
- * @param[in] array
- * @param[in] array_size
- * @param[out] p_cent_freq_idx
- * @param[out] p_cent_freq_val
- */
-static void find_cent_freq(float *array, int32_t array_size, int32_t *p_cent_freq_idx, float *p_cent_freq_val)
+// IKKE TESTET:
+static void set_hw_gain_stage_gpios(eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+{
+    switch (eFFT_hw_gain_stage)
+    {
+    case up_to_90dB_SPL:
+        gpio_set_level(GPIO_NUM_RANGE_SWITCH_L, GPIO_LVL_UP_TO_90DB);
+        gpio_set_level(GPIO_NUM_RANGE_SWITCH_R, GPIO_LVL_UP_TO_90DB);
+        break;
+    case up_to_120dB_SPL:
+        gpio_set_level(GPIO_NUM_RANGE_SWITCH_L, GPIO_LVL_UP_TO_120DB);
+        gpio_set_level(GPIO_NUM_RANGE_SWITCH_R, GPIO_LVL_UP_TO_120DB);
+        break;
+    default:
+        ESP_LOGE(DSP_TAG, "ERROR: Invalid hw gain stage value");
+        break;
+    }
+}
+
+static void find_cent_freq(float *array, int32_t array_size, uint32_t *p_cent_freq_hz, float *p_cent_freq_val)
 {
     float temp_val;
     float biggest_val = 0;
@@ -90,8 +108,14 @@ static void find_cent_freq(float *array, int32_t array_size, int32_t *p_cent_fre
             biggest_val_index = i;
         }
     }
-    *p_cent_freq_idx = biggest_val_index;
+
     *p_cent_freq_val = biggest_val;
+    *p_cent_freq_hz = biggest_val_index * (ADC_SAMPLING_FREQ / (DATA_BLOCK_SIZE)); /*  Bin_freq = Bin_nr * (fs / N).
+                                                                                    (DATA_BLOCK_SIZE is used instead of DATA_BLOCK_SIZE/2 even though DATA_BLOCK_SIZE/2 is the size of the FFT result.
+                                                                                     This is because the half sized FFT result is single sided and goes from 0 - fny. The Bin_nr to Bin_freq expression uses the range to fs (not fny),
+                                                                                     so we use the full DATA_BLOCK_SIZE in the expression)
+                                                                                 */
+                                                                                   // (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
     // ESP_LOGI(DSP_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
 }
 
@@ -136,12 +160,32 @@ void dsp_ecep_handler_task()
             switch (u8_ecep_cmd_id)
             {
             case ECEP_CMD_FETCH_FFT:
-                // ASD
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_FFT received");
+                switch (dsp_ecep_command.param.channel)
+                {
+                case left:
+                    send_ecep_evnt_L_fft_res();
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT);
+                    break;
+                case right:
+                    send_ecep_evnt_R_fft_res();
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT);
+                    break;
+                case both:
+                    send_ecep_evnt_L_fft_res();
+                    send_ecep_evnt_R_fft_res();
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT);
+                    break;
+                default:
+                    send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_FETCH_FFT);
+                    break;
+                }
                 break;
 
             case ECEP_CMD_SET_FFT_OUTP_FORM:
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_FFT_OUTP_FORM received");
+                // Check for valid param:
                 output_form_temp = dsp_ecep_command.param.fft_output_format;
-
                 if ((output_form_temp != ampltitude_mV) && (output_form_temp != ampltitude_dB_SPL) && (output_form_temp != power_mV))
                 {
                     send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_FFT_OUTP_FORM);
@@ -155,8 +199,9 @@ void dsp_ecep_handler_task()
                 break;
 
             case ECEP_CMD_SET_FFT_WIND_TYPE:
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_FFT_WIND_TYPE received");
+                // Check for valid param:
                 wind_type_temp = dsp_ecep_command.param.fft_window;
-
                 if ((wind_type_temp != hann) && (wind_type_temp != blackman) && (wind_type_temp != blackman_harris) && (wind_type_temp != blackman_nuttall) && (wind_type_temp != nuttall) && (wind_type_temp != flat_top))
                 {
                     send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_FFT_WIND_TYPE);
@@ -166,18 +211,21 @@ void dsp_ecep_handler_task()
 
                 // Execute command:
                 gs_window_used = dsp_ecep_command.param.fft_window;
+                fft_wrapper_set_wind(gs_window_used);
                 send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_SET_FFT_WIND_TYPE);
                 break;
 
             case ECEP_CMD_SET_FFT_RES_AVG_CT:
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_FFT_RES_AVG_CT received");
                 gs_i32_fft_avg_max_cnt = dsp_ecep_command.param.u32_fft_res_avg_count;
                 calc_fft_duration_ms(); // recalc total fft time
                 send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_SET_FFT_RES_AVG_CT);
                 break;
 
             case ECEP_CMD_SET_WIND_CORR_FACTOR:
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_WIND_CORR_FACTOR received");
+                // Check for valid param:
                 wind_corr_fact_temp = dsp_ecep_command.param.fft_win_corr_factor;
-
                 if ((wind_corr_fact_temp != none) && (wind_corr_fact_temp != amplitude) && (wind_corr_fact_temp != energy))
                 {
                     send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_WIND_CORR_FACTOR);
@@ -191,28 +239,93 @@ void dsp_ecep_handler_task()
                 break;
 
             case ECEP_CMD_FETCH_FFT_STGS:
-                // ASD
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_FFT_STGS received");
+                // Execute command:
+                send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT_STGS);
+                send_ecep_evnt_fft_stgs(gs_fft_out_format, gs_window_used, gs_i32_fft_avg_max_cnt, gs_wind_corr_factor);
                 break;
 
             case ECEP_CMD_FETCH_FFT_TOTAL_DUR:
-                // ASD
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_FFT_TOTAL_DUR received");
+                // Execute command:
+                send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_FFT_TOTAL_DUR);
+                send_ecep_evnt_fft_tot_dur(gs_u32_total_fft_dur_ms);
                 break;
 
             case ECEP_CMD_FETCH_ADC_RAW_DATA:
-                // ASD
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_ADC_RAW_DATA received");
+                switch (dsp_ecep_command.param.channel)
+                {
+                case left:
+                    send_ecep_evnt_L_adc_raw();
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_ADC_RAW_DATA);
+                    break;
+                case right:
+                    send_ecep_evnt_R_adc_raw();
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_ADC_RAW_DATA);
+                    break;
+                case both:
+                    send_ecep_evnt_L_adc_raw();
+                    send_ecep_evnt_R_adc_raw();
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_ADC_RAW_DATA);
+                    break;
+                default:
+                    send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_FETCH_ADC_RAW_DATA);
+                    break;
+                }
                 break;
 
             case ECEP_CMD_FETCH_CEN_FREQ:
-                // ASD
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_CEN_FREQ received");
+                switch (dsp_ecep_command.param.channel)
+                {
+                case left:
+                    send_ecep_evnt_L_cen_freq(gs_u32_L_cent_freq_hz);
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ);
+                    break;
+                case right:
+                    send_ecep_evnt_R_cen_freq(gs_u32_R_cent_freq_hz);
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ);
+                    break;
+                case both:
+                    send_ecep_evnt_L_cen_freq(gs_u32_L_cent_freq_hz);
+                    send_ecep_evnt_R_cen_freq(gs_u32_R_cent_freq_hz);
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ);
+                    break;
+                default:
+                    send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_FETCH_CEN_FREQ);
+                    break;
+                }
                 break;
 
             case ECEP_CMD_FETCH_CEN_FREQ_AMP:
-                // ASD
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_CEN_FREQ_AMP received");
+                switch (dsp_ecep_command.param.channel)
+                {
+                case left:
+                    send_ecep_evnt_L_cen_freq_amp(gs_f32_L_cent_freq_val);
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ_AMP);
+                    break;
+                case right:
+                    send_ecep_evnt_R_cen_freq_amp(gs_f32_R_cent_freq_val);
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ_AMP);
+                    break;
+                case both:
+                    send_ecep_evnt_L_cen_freq_amp(gs_f32_L_cent_freq_val);
+                    send_ecep_evnt_R_cen_freq_amp(gs_f32_R_cent_freq_val);
+                    send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_CEN_FREQ_AMP);
+                    break;
+                default:
+                    send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_FETCH_CEN_FREQ_AMP);
+                    break;
+                }
+                break;
                 break;
 
             case ECEP_CMD_SET_MIC_RANGE:
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_MIC_RANGE received");
+                // Check for valid param:
                 hw_gain_stage_temp = dsp_ecep_command.param.range;
-
                 if ((hw_gain_stage_temp != up_to_90dB_SPL) && (hw_gain_stage_temp != up_to_120dB_SPL))
                 {
                     send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_MIC_RANGE);
@@ -222,11 +335,15 @@ void dsp_ecep_handler_task()
 
                 // Execute command:
                 gs_hw_gain_stage = hw_gain_stage_temp;
+                set_hw_gain_stage_gpios(gs_hw_gain_stage);
                 send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_SET_MIC_RANGE);
                 break;
 
             case ECEP_CMD_FETCH_MIC_RANGE:
-                // ASD
+                ESP_LOGI(DSP_TAG, "ECEP_CMD_FETCH_MIC_RANGE received");
+                // Execute command:
+                send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_MIC_RANGE);
+                send_ecep_evnt_mic_range(gs_hw_gain_stage);
                 break;
 
             default:
@@ -255,8 +372,8 @@ void dsp_left_ch_task()
 
     uint32_t ret;
 
-    uint32_t testy_counter = 0;
-    uint32_t testy_sum = 0;
+    // uint32_t testy_counter = 0;
+    // uint32_t testy_sum = 0;
 
     while (1)
     {
@@ -270,10 +387,10 @@ void dsp_left_ch_task()
         if (xSemaphoreTake(gs_adc1_shared_mem_sem, portMAX_DELAY) == pdTRUE)
         {
             memcpy(gs_af32_adc1_temp_buf, gs_pf32_adc1_shared, sizeof(gs_af32_adc1_temp_buf)); // Copy from shared memory to local copy
-            // memset(gs_pf32_adc1_shared, 0, sizeof(gs_af32_adc1_temp_buf));  // Reset the shared memory, just to be sure (gs_af32_adc1_temp_buf is same size as shared space array)
+            memset(gs_pf32_adc1_shared, 0, sizeof(gs_af32_adc1_temp_buf));                     // Reset the shared memory, just to be sure (gs_af32_adc1_temp_buf is same size as shared space array)
             xSemaphoreGive(gs_adc1_shared_mem_sem);
 
-            // ESP_LOGI(DSP_TAG, "ADC1 Read Voltage: %f", gs_af32_adc1_temp_buf[0]);
+            ESP_LOGI(DSP_TAG, "ADC1 Read Voltage: %f", gs_af32_adc1_temp_buf[0]);
 
             // for(int32_t i = 0 ; i <= DATA_BLOCK_SIZE ; i += 1)
             // {
@@ -293,6 +410,7 @@ void dsp_left_ch_task()
             // Remove DC-offset (DC-offset was added by our hardware. aka not a part of the original signal)
             gs_af32_adc1_temp_buf[0] = 0;
             gs_af32_adc1_temp_buf[1] = 0;
+            // TÆST OM DET ER NOK BARE AT FJERNE DE FØRSTE 2. ELLER VI ER NØDT TIL AT FJERNE FLERE
 
             // Test stuff:
 
@@ -301,7 +419,7 @@ void dsp_left_ch_task()
             // {
             //     testy_counter = 0;
             //     //dsps_view_spectrum(gs_af32_adc1_temp_buf, DATA_BLOCK_SIZE/2, 0, 55); // for debugging
-            //     ESP_LOGI(DSP_TAG, "Center freq idx: %i" , (int) gs_i32_L_cent_freq_idx);
+            //     ESP_LOGI(DSP_TAG, "Center freq idx: %i" , (int) gs_u32_L_cent_freq_hz);
             //     ESP_LOGI(DSP_TAG, "Center freq val: %f" , gs_f32_L_cent_freq_val);
 
             //     // for(int i = DATA_BLOCK_SIZE/12 ; i < DATA_BLOCK_SIZE/6 ; i++)
@@ -339,7 +457,7 @@ void dsp_left_ch_task()
                 }
 
                 // Find center frequency:
-                find_cent_freq(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE / 2, &gs_i32_L_cent_freq_idx, &gs_f32_L_cent_freq_val); // SKAL HAVE ANDRE INPUTS
+                find_cent_freq(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE / 2, &gs_u32_L_cent_freq_hz, &gs_f32_L_cent_freq_val);
 
                 // Copy FFT averaged result from local copy into shared memory:
                 if (xSemaphoreTake(gs_fft_L_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
@@ -408,8 +526,18 @@ void dsp_init(float *pf32_adc1_shared,
 
     gs_xQueue_dsp_ecep_cmds = xQueue_dsp_ecep_cmds;
 
-    calc_fft_duration_ms();
+    // GPIO setup for hardware gain stage multiplexing:
+    gpio_config_t io_conf = {
+        .pin_bit_mask = ((1 << GPIO_NUM_RANGE_SWITCH_L) | (1 << GPIO_NUM_RANGE_SWITCH_R)),
+        .intr_type = GPIO_INTR_DISABLE,        // disable interrupts.
+        .mode = GPIO_MODE_INPUT_OUTPUT,        // Set as output/input mode.
+        .pull_down_en = GPIO_PULLDOWN_DISABLE, // Disable pull up.
+        .pull_up_en = GPIO_PULLUP_ENABLE,      // Disable pull down.
+    };
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+    set_hw_gain_stage_gpios(DFLT_HW_GAIN_STAGE);
 
+    // Miscellaneous setup:
+    calc_fft_duration_ms();
     fft_wrapper_init_tech3(gs_window_used);
-    // SÆT HW GAIN STAGE GPIO TIL HVAD END DEFAULT_HW_G_STAGE ER
 }
