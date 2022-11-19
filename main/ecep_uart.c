@@ -48,10 +48,10 @@ static float *gs_pf32_R_fft_res_shr;
 static SemaphoreHandle_t gs_fft_L_res_shr_mem_sem;
 static SemaphoreHandle_t gs_fft_R_res_shr_mem_sem;
 
-static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and_bulk, uint16_t u8_params_and_bulk_len)
+static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and_bulk, uint16_t u16_params_and_bulk_len)
 {
 
-    // for(int32_t i = 0; i < u8_params_and_bulk_len ; i++)
+    // for(int32_t i = 0; i < u16_params_and_bulk_len ; i++)
     // {
     //     ESP_LOGI(TAG, "0x%04x", pv_params_and_bulk[i]);
     // }
@@ -69,7 +69,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
     {
     case ECEP_CMD_FETCH_FFT:
 
-        if (u8_params_and_bulk_len != sizeof(uint8_t))
+        if (u16_params_and_bulk_len != sizeof(uint8_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -87,7 +87,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_SET_FFT_OUTP_FORM:
 
-        if (u8_params_and_bulk_len != sizeof(uint8_t))
+        if (u16_params_and_bulk_len != sizeof(uint8_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -105,7 +105,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_SET_FFT_WIND_TYPE:
 
-        if (u8_params_and_bulk_len != sizeof(uint8_t))
+        if (u16_params_and_bulk_len != sizeof(uint8_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -123,7 +123,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_SET_FFT_RES_AVG_CT:
 
-        if (u8_params_and_bulk_len != sizeof(uint32_t))
+        if (u16_params_and_bulk_len != sizeof(uint32_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -141,7 +141,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_SET_WIND_CORR_FACTOR:
 
-        if (u8_params_and_bulk_len != sizeof(uint8_t))
+        if (u16_params_and_bulk_len != sizeof(uint8_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -159,7 +159,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_FETCH_FFT_STGS:
 
-        if (u8_params_and_bulk_len != 0) // there is no param for this command
+        if (u16_params_and_bulk_len != 0) // there is no param for this command
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -177,7 +177,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_FETCH_FFT_TOTAL_DUR:
 
-        if (u8_params_and_bulk_len != 0) // there is no param for this command
+        if (u16_params_and_bulk_len != 0) // there is no param for this command
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -194,7 +194,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_FETCH_ADC_RAW_DATA:
 
-        if (u8_params_and_bulk_len != sizeof(uint8_t))
+        if (u16_params_and_bulk_len != sizeof(uint8_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -212,7 +212,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_FETCH_CEN_FREQ:
 
-        if (u8_params_and_bulk_len != sizeof(uint8_t))
+        if (u16_params_and_bulk_len != sizeof(uint8_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -230,7 +230,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_FETCH_CEN_FREQ_AMP:
 
-        if (u8_params_and_bulk_len != sizeof(uint8_t))
+        if (u16_params_and_bulk_len != sizeof(uint8_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -248,7 +248,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_SET_MIC_RANGE:
 
-        if (u8_params_and_bulk_len != sizeof(uint8_t))
+        if (u16_params_and_bulk_len != sizeof(uint8_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -267,7 +267,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_FETCH_MIC_RANGE:
 
-        if (u8_params_and_bulk_len != 0) // there is no param for this command
+        if (u16_params_and_bulk_len != 0) // there is no param for this command
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -284,7 +284,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_TRIG_PR_CLICK:
 
-        if (u8_params_and_bulk_len != 0) // there is no param for this command
+        if (u16_params_and_bulk_len != 0) // there is no param for this command
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -301,7 +301,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_TRIG_PR_HOLD:
 
-        if (u8_params_and_bulk_len != 0) // there is no param for this command
+        if (u16_params_and_bulk_len != 0) // there is no param for this command
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -318,7 +318,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_TRIG_PR_RELEASE:
 
-        if (u8_params_and_bulk_len != 0) // there is no param for this command
+        if (u16_params_and_bulk_len != 0) // there is no param for this command
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -335,7 +335,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_TRIG_PR_PRESS:
 
-        if (u8_params_and_bulk_len != sizeof(uint32_t))
+        if (u16_params_and_bulk_len != sizeof(uint32_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -353,7 +353,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_SET_PR_DEF_STATE:
 
-        if (u8_params_and_bulk_len != sizeof(uint8_t))
+        if (u16_params_and_bulk_len != sizeof(uint8_t))
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
@@ -371,7 +371,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *u8_params_and
 
     case ECEP_CMD_FETCH_PR_DEF_STATE:
 
-        if (u8_params_and_bulk_len != 0) // there is no param for this command
+        if (u16_params_and_bulk_len != 0) // there is no param for this command
         {
             // Something went wrong.
             ESP_LOGE(TAG, "ERROR: invalid packet length. Packets are now potentially unsyncronized. Trying to fix by restarting...");
