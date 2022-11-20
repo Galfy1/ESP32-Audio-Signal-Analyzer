@@ -11,6 +11,7 @@ ASD
     2. Run "git submodule update" git command
 3. Run the following command from the vscode command pallette (Ctrl-Shift-P):
     1. ESP-IDF: Add vscode configuration folder
+4. For consistant formatting please use the standard C/C++ extension as the formatter (for info in "formatting" section of this readme file)
 5. Use the Espressif IDF extension bar at the buttom of VS Code to build and flash.   
  
 (An alternative to step 1 and 2 is to pass --recurse-submodules to the git clone command. This will automatically initialize and update each submodule in the repository) \
@@ -59,7 +60,8 @@ This project is created for the ESP32-S3 \
 Clang is used for formatting. For this project a .clang-format file has been added based on the "Visual Studio" predefined clang style. 
 
 **Using Clang in vscode**: \
-The standard c/c++ extension in vscode supports clang. Remember to set "c/c++" as "default formatter" in vscode settings. "Format On Save" can also be enabled in vscode settings. 
+The standard c/c++ extension in vscode supports clang. Remember to set "c/c++" as "default formatter" in vscode settings. "Format On Save" can also be enabled in vscode settings
+(an alternative to "format on save" is to manually right-click within a c or h file and select "format document" each time).
 Remember that if vscode settings are applied at a "workspace" level they are stored in settings.json (aka they will be wiped if settings.json is deleted).
 If no .clang-format file is present in the parent directery, then the c/c++ extention will use the predefined style specified in "Clang_format_fallback Style" in vscode settings. 
 
