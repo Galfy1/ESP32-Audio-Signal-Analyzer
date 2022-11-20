@@ -1,17 +1,17 @@
 #include <stdint.h>
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 
-#include "esp_log.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
 
-#include "patient_response.h"
-#include "ecep_uart.h" // For convenience functions used to access the ecep event queue
 #include "common_defines.h"
 #include "ecep_defines.h"
+#include "ecep_uart.h" // For convenience functions used to access the ecep event queue
+#include "patient_response.h"
 
 static const char *PATIENT_RESP_TAG = "patient_response.c";
 
@@ -181,11 +181,11 @@ void patient_resp_task()
 
     // Initialize the GPIO 6 config structure.
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1 << GPIO_PR_PIN),    // GPIO pin 6.
-        .intr_type = GPIO_INTR_DISABLE,        // disable interrupts.
-        .mode = GPIO_MODE_INPUT_OUTPUT,        // Set as output/input mode.
-        .pull_down_en = GPIO_PULLDOWN_DISABLE, // Disable pull up.
-        .pull_up_en = GPIO_PULLUP_ENABLE,      // Disable pull down.
+        .pin_bit_mask = (1 << GPIO_PR_PIN),     // GPIO pin 6.
+        .intr_type    = GPIO_INTR_DISABLE,      // disable interrupts.
+        .mode         = GPIO_MODE_INPUT_OUTPUT, // Set as output/input mode.
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,  // Disable pull up.
+        .pull_up_en   = GPIO_PULLUP_ENABLE,     // Disable pull down.
     };
 
     ESP_ERROR_CHECK(gpio_config(&io_conf));

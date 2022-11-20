@@ -2,30 +2,30 @@
 #include <string.h> // For memcpy()
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 
-#include "esp_log.h"
 #include "driver/uart.h"
+#include "esp_log.h"
 
 #include "common_defines.h"
-#include "ecep_uart.h"
 #include "ecep_defines.h"
+#include "ecep_uart.h"
 
 static const char *TAG = "ecep_uart.c";
 
 // (Debug console is moved from UART0 to UART1 in menuconfig)
 
-#define ECEP_UART_NUM UART_NUM_0                  // Uart 0: The uart routed to the uart<->usb chip on the ESP32-S3 dev-kit-c (aka the "uart" usb port)
-#define ECEP_UART_CFG_BAUD 921600                 // Lave test til at se hvor hurtig vi kan slippe afsted med uden stor fejl
-#define ECEP_UART_CFG_FC UART_HW_FLOWCTRL_DISABLE // Flow control (usb<->uart chip on esp32-s3 devkit-c is not hooked up to CTS)
-#define ECEP_TXD_PIN 43                           // (GPIO --> UART0 TX. aka uart-usb-port on devkit-c)
-#define ECEP_RXD_PIN 44                           // (GPIO --> UART0 TX. aka uart-usb-port on devkit-c)
-#define ECEP_RTS_PIN UART_PIN_NO_CHANGE           // Not used if HW flowcontrol is disabled
-#define ECEP_CTS_PIN UART_PIN_NO_CHANGE           // Not used if HW flowcontrol is disabled
+#define ECEP_UART_NUM      UART_NUM_0               // Uart 0: The uart routed to the uart<->usb chip on the ESP32-S3 dev-kit-c (aka the "uart" usb port)
+#define ECEP_UART_CFG_BAUD 921600                   // Lave test til at se hvor hurtig vi kan slippe afsted med uden stor fejl
+#define ECEP_UART_CFG_FC   UART_HW_FLOWCTRL_DISABLE // Flow control (usb<->uart chip on esp32-s3 devkit-c is not hooked up to CTS)
+#define ECEP_TXD_PIN       43                       // (GPIO --> UART0 TX. aka uart-usb-port on devkit-c)
+#define ECEP_RXD_PIN       44                       // (GPIO --> UART0 TX. aka uart-usb-port on devkit-c)
+#define ECEP_RTS_PIN       UART_PIN_NO_CHANGE       // Not used if HW flowcontrol is disabled
+#define ECEP_CTS_PIN       UART_PIN_NO_CHANGE       // Not used if HW flowcontrol is disabled
 
-#define BUF_SIZE 1024 // Ved ikke om det bliver et problem hvis den her er under størrelsen på en command pakke? Måske ikke Finder vi måske aldrig ud af, da vi ikke har en command pakke over 1024 i størrelse anyway.
+#define BUF_SIZE         1024 // Ved ikke om det bliver et problem hvis den her er under størrelsen på en command pakke? Måske ikke Finder vi måske aldrig ud af, da vi ikke har en command pakke over 1024 i størrelse anyway.
 #define UART_RD_BUF_SIZE BUF_SIZE
 
 static QueueHandle_t ecep_uart_queue;   // Queue for uart api
@@ -35,16 +35,16 @@ static QueueHandle_t gs_xQueue_ecep_events;   // Queue for ECEP events
 static QueueHandle_t gs_xQueue_pr_ecep_cmds;  // Queue for Patient Response ECEP commands
 static QueueHandle_t gs_xQueue_dsp_ecep_cmds; // Queue for DSP ECEP commands
 
-static uint8_t gs_au8_raw_uart_shr[UART_RD_BUF_SIZE]; // Raw uart read data (shared memory)
+static uint8_t           gs_au8_raw_uart_shr[UART_RD_BUF_SIZE]; // Raw uart read data (shared memory)
 static SemaphoreHandle_t gs_raw_uart_shr_mem_sem;
 
-static float *gs_pf32_adc1_shared;
-static float *gs_pf32_adc2_shared;
+static float            *gs_pf32_adc1_shared;
+static float            *gs_pf32_adc2_shared;
 static SemaphoreHandle_t gs_adc1_shared_mem_sem;
 static SemaphoreHandle_t gs_adc2_shared_mem_sem;
 
-static float *gs_pf32_L_fft_res_shr;
-static float *gs_pf32_R_fft_res_shr;
+static float            *gs_pf32_L_fft_res_shr;
+static float            *gs_pf32_R_fft_res_shr;
 static SemaphoreHandle_t gs_fft_L_res_shr_mem_sem;
 static SemaphoreHandle_t gs_fft_R_res_shr_mem_sem;
 
@@ -76,7 +76,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id         = u8_command_code;
         sIntern_command_setup.param.channel = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -94,7 +94,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id                   = u8_command_code;
         sIntern_command_setup.param.fft_output_format = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -112,7 +112,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id            = u8_command_code;
         sIntern_command_setup.param.fft_window = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -130,7 +130,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id                       = u8_command_code;
         sIntern_command_setup.param.u32_fft_res_avg_count = *((uint32_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -148,7 +148,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id                     = u8_command_code;
         sIntern_command_setup.param.fft_win_corr_factor = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -201,7 +201,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id         = u8_command_code;
         sIntern_command_setup.param.channel = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -219,7 +219,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id         = u8_command_code;
         sIntern_command_setup.param.channel = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -237,7 +237,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id         = u8_command_code;
         sIntern_command_setup.param.channel = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -255,7 +255,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id       = u8_command_code;
         sIntern_command_setup.param.range = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -342,7 +342,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id          = u8_command_code;
         sIntern_command_setup.param.u32_time = *((uint32_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -360,7 +360,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id = u8_command_code;
+        sIntern_command_setup.u8_id             = u8_command_code;
         sIntern_command_setup.param.relay_state = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
@@ -402,16 +402,16 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
 void ecep_rx_packet_handler_task()
 {
     uint32_t u32_data_len = 0;
-    uint8_t au8_raw_uart_copy[UART_RD_BUF_SIZE];
+    uint8_t  au8_raw_uart_copy[UART_RD_BUF_SIZE];
 
-    uint8_t u8_packet_data[ECEP_MAX_CMD_PACKET_LEN]; // This array is small enough that we dont need to place it in PSRAM
+    uint8_t  u8_packet_data[ECEP_MAX_CMD_PACKET_LEN]; // This array is small enough that we dont need to place it in PSRAM
     uint32_t u32_package_byte_counter = 0;
 
     uint32_t byte_counter;
 
-    uint8_t u8_packet_type;
-    uint8_t u8_command_code = 0xFF;
-    uint16_t u16_packet_len = 0xFFFF;
+    uint8_t  u8_packet_type;
+    uint8_t  u8_command_code = 0xFF;
+    uint16_t u16_packet_len  = 0xFFFF;
 
     uint32_t remaining_package_len;
     uint32_t remaining_data_len;
@@ -445,9 +445,9 @@ void ecep_rx_packet_handler_task()
 
                     if (u32_package_byte_counter == ECEP_HEADER_LEN) // Header has been fully read
                     {
-                        u8_packet_type = u8_packet_data[0];
+                        u8_packet_type  = u8_packet_data[0];
                         u8_command_code = u8_packet_data[1];
-                        u16_packet_len = u8_packet_data[2] | (u8_packet_data[3] << 8);
+                        u16_packet_len  = u8_packet_data[2] | (u8_packet_data[3] << 8);
 
                         ESP_LOGI(TAG, "Received Packet - u8_packet_type:  0x%04x", (unsigned int)u8_packet_type);
                         ESP_LOGI(TAG, "Received Packet - u8_command_code: 0x%04x", (unsigned int)u8_command_code);
@@ -472,8 +472,8 @@ void ecep_rx_packet_handler_task()
                 if ((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter != u16_packet_len)) // Copy the rest of the package in big chunks (faster then extracting 1 byte at a time)
                 {
                     remaining_package_len = u16_packet_len - u32_package_byte_counter;
-                    remaining_data_len = u32_data_len - byte_counter;
-                    chunk_size_to_cpy = (remaining_package_len < remaining_data_len ? remaining_package_len : remaining_data_len); // chunk size to copy is limited by either u16_packet_len or u32_data_len
+                    remaining_data_len    = u32_data_len - byte_counter;
+                    chunk_size_to_cpy     = (remaining_package_len < remaining_data_len ? remaining_package_len : remaining_data_len); // chunk size to copy is limited by either u16_packet_len or u32_data_len
 
                     // ESP_LOGE(TAG, "remaining_package_len: %i", (int) remaining_package_len);
                     // ESP_LOGE(TAG, "remaining_data_len: %i", (int) remaining_data_len);
@@ -596,9 +596,9 @@ void ecep_tx_packet_header_prep(uint8_t *pu8_tx_packet_buf, uint8_t packet_type,
     // | Packet Type | Command/event code | Packet Length (low byte) | Packet Length (high byte) |
     //    (1 byte)         (1 byte)                 (1 byte)                    (1 byte)
 
-    pu8_tx_packet_buf[TX_PACKET_TYPE_BYTE] = (uint8_t)packet_type;
-    pu8_tx_packet_buf[TX_PACKET_CMD_EVNT_BYTE] = (uint8_t)event_id;
-    pu8_tx_packet_buf[TX_PACKET_PACK_LEN_LOW_BYTE] = (uint8_t)packet_len & 0x00FF;
+    pu8_tx_packet_buf[TX_PACKET_TYPE_BYTE]          = (uint8_t)packet_type;
+    pu8_tx_packet_buf[TX_PACKET_CMD_EVNT_BYTE]      = (uint8_t)event_id;
+    pu8_tx_packet_buf[TX_PACKET_PACK_LEN_LOW_BYTE]  = (uint8_t)packet_len & 0x00FF;
     pu8_tx_packet_buf[TX_PACKET_PACK_LEN_HIGH_BYTE] = (uint8_t)(packet_len >> 8) & 0x00FF;
 }
 
@@ -610,7 +610,7 @@ void ecep_uart_tx_task()
     //    (4 bytes)           (differ)              (differ)
 
     sIntern_event_setup_t ecep_event;
-    uint16_t packet_len = 0;
+    uint16_t              packet_len = 0;
 
     uint8_t *pu8_tx_packet_buf = heap_caps_malloc(ECEP_MAX_EVNT_PACKET_LEN, MALLOC_CAP_SPIRAM); // TX packet buffer to be transmitted. It size equal the maximum packet size in bytes - 2^16 = 65536
     if ((pu8_tx_packet_buf == NULL))
@@ -813,31 +813,31 @@ static void baud_error_test(int32_t i32_uart_num, int32_t i32_baud)
     uint32_t u32_actual_baud;
 
     uart_config_t baud_test_config = {
-        .baud_rate = i32_baud,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = ECEP_UART_CFG_FC,
+        .baud_rate           = i32_baud,
+        .data_bits           = UART_DATA_8_BITS,
+        .parity              = UART_PARITY_DISABLE,
+        .stop_bits           = UART_STOP_BITS_1,
+        .flow_ctrl           = ECEP_UART_CFG_FC,
         .rx_flow_ctrl_thresh = 122,
-        .source_clk = UART_SCLK_DEFAULT, // Default source clk is from APB (is fastest -> least baud to reg rounding error)
+        .source_clk          = UART_SCLK_DEFAULT, // Default source clk is from APB (is fastest -> least baud to reg rounding error)
     };
     uart_param_config(i32_uart_num, &baud_test_config);
     uart_get_baudrate(i32_uart_num, &u32_actual_baud);
     ESP_LOGI(TAG, "BAUD TEST. Set baud: %d  Actual baud: %d  Error ratio: %f", (int)i32_baud, (int)u32_actual_baud, (float)u32_actual_baud / (float)i32_baud);
 }
 
-void ecep_uart_init(QueueHandle_t xQueue_pr_ecep_cmds,
-                    QueueHandle_t xQueue_dsp_ecep_cmds,
-                    float *pf32_adc1_shared,
-                    float *pf32_adc2_shared,
+void ecep_uart_init(QueueHandle_t     xQueue_pr_ecep_cmds,
+                    QueueHandle_t     xQueue_dsp_ecep_cmds,
+                    float            *pf32_adc1_shared,
+                    float            *pf32_adc2_shared,
                     SemaphoreHandle_t adc1_shared_mem_sem,
                     SemaphoreHandle_t adc2_shared_mem_sem,
-                    float *pf32_L_fft_res_shr,
-                    float *pf32_R_fft_res_shr,
+                    float            *pf32_L_fft_res_shr,
+                    float            *pf32_R_fft_res_shr,
                     SemaphoreHandle_t fft_L_res_shr_mem_sem,
                     SemaphoreHandle_t fft_R_res_shr_mem_sem)
 {
-    gs_xQueue_pr_ecep_cmds = xQueue_pr_ecep_cmds;
+    gs_xQueue_pr_ecep_cmds  = xQueue_pr_ecep_cmds;
     gs_xQueue_dsp_ecep_cmds = xQueue_dsp_ecep_cmds;
 
     // Create ECEP event queue:
@@ -851,13 +851,13 @@ void ecep_uart_init(QueueHandle_t xQueue_pr_ecep_cmds,
 
     // ECEP UART config:
     uart_config_t ecep_uart_config = {
-        .baud_rate = ECEP_UART_CFG_BAUD,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = ECEP_UART_CFG_FC,
+        .baud_rate           = ECEP_UART_CFG_BAUD,
+        .data_bits           = UART_DATA_8_BITS,
+        .parity              = UART_PARITY_DISABLE,
+        .stop_bits           = UART_STOP_BITS_1,
+        .flow_ctrl           = ECEP_UART_CFG_FC,
         .rx_flow_ctrl_thresh = 122,
-        .source_clk = UART_SCLK_DEFAULT, // Default source clk is from APB (is fastest -> least baud to reg rounding error) // TEST LIGE
+        .source_clk          = UART_SCLK_DEFAULT, // Default source clk is from APB (is fastest -> least baud to reg rounding error) // TEST LIGE
     };
     // Set ECEP UART config:
     ESP_ERROR_CHECK(uart_param_config(ECEP_UART_NUM, &ecep_uart_config));
@@ -885,13 +885,13 @@ void ecep_uart_init(QueueHandle_t xQueue_pr_ecep_cmds,
     }
 
     // TX Packet handler
-    gs_pf32_adc1_shared = pf32_adc1_shared;
-    gs_pf32_adc2_shared = pf32_adc2_shared;
+    gs_pf32_adc1_shared    = pf32_adc1_shared;
+    gs_pf32_adc2_shared    = pf32_adc2_shared;
     gs_adc1_shared_mem_sem = adc1_shared_mem_sem;
     gs_adc2_shared_mem_sem = adc2_shared_mem_sem;
 
-    gs_pf32_L_fft_res_shr = pf32_L_fft_res_shr;
-    gs_pf32_R_fft_res_shr = pf32_R_fft_res_shr;
+    gs_pf32_L_fft_res_shr    = pf32_L_fft_res_shr;
+    gs_pf32_R_fft_res_shr    = pf32_R_fft_res_shr;
     gs_fft_L_res_shr_mem_sem = fft_L_res_shr_mem_sem;
     gs_fft_R_res_shr_mem_sem = fft_R_res_shr_mem_sem;
 }
@@ -903,9 +903,9 @@ void send_ecep_evnt_cmd_status(eCMD_status_t status_type, uint8_t u8_cmd_id)
 {
     sIntern_event_setup_t event;
 
-    event.u8_id = ECEP_EVNT_COMMAND_STATUS;
+    event.u8_id                               = ECEP_EVNT_COMMAND_STATUS;
     event.param.status_event.u8_parent_cmd_id = u8_cmd_id;
-    event.param.status_event.status = status_type;
+    event.param.status_event.status           = status_type;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
     {
@@ -918,7 +918,7 @@ void send_ecep_evnt_pr_def_state(eRelay_state_t default_relay_state)
 {
     sIntern_event_setup_t event;
 
-    event.u8_id = ECEP_EVNT_PR_DEF_STATE;
+    event.u8_id            = ECEP_EVNT_PR_DEF_STATE;
     event.param.pr_default = default_relay_state;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -933,11 +933,11 @@ void send_ecep_evnt_fft_stgs(eFFT_output_form_t fft_output_format, eFFT_window_t
 {
     sIntern_event_setup_t event;
 
-    event.u8_id = ECEP_EVNT_FFT_STGS;
-    event.param.FFT_stgs.fft_output_format = fft_output_format;
-    event.param.FFT_stgs.fft_window = fft_window;
+    event.u8_id                                = ECEP_EVNT_FFT_STGS;
+    event.param.FFT_stgs.fft_output_format     = fft_output_format;
+    event.param.FFT_stgs.fft_window            = fft_window;
     event.param.FFT_stgs.u32_fft_res_avg_count = u32_fft_res_avg_count;
-    event.param.FFT_stgs.fft_corr_factor = fft_corr_factor;
+    event.param.FFT_stgs.fft_corr_factor       = fft_corr_factor;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
     {
@@ -950,7 +950,7 @@ void send_ecep_evnt_fft_tot_dur(uint32_t u32_fft_total_dur_ms)
 {
     sIntern_event_setup_t event;
 
-    event.u8_id = ECEP_EVNT_FFT_TOT_DUR;
+    event.u8_id          = ECEP_EVNT_FFT_TOT_DUR;
     event.param.u32_time = u32_fft_total_dur_ms;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -964,7 +964,7 @@ void send_ecep_evnt_L_cen_freq(uint32_t u32_center_freq_hz)
 {
     sIntern_event_setup_t event;
 
-    event.u8_id = ECEP_EVNT_LEFT_CEN_FREQ;
+    event.u8_id                 = ECEP_EVNT_LEFT_CEN_FREQ;
     event.param.u32_cen_freq_hz = u32_center_freq_hz;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -978,7 +978,7 @@ void send_ecep_evnt_R_cen_freq(uint32_t u32_center_freq_hz)
 {
     sIntern_event_setup_t event;
 
-    event.u8_id = ECEP_EVNT_RIGHT_CEN_FREQ;
+    event.u8_id                 = ECEP_EVNT_RIGHT_CEN_FREQ;
     event.param.u32_cen_freq_hz = u32_center_freq_hz;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -992,7 +992,7 @@ void send_ecep_evnt_L_cen_freq_amp(float f32_center_freq_amp)
 {
     sIntern_event_setup_t event;
 
-    event.u8_id = ECEP_EVNT_LEFT_CEN_FREQ_AMP;
+    event.u8_id                  = ECEP_EVNT_LEFT_CEN_FREQ_AMP;
     event.param.f32_cen_freq_amp = f32_center_freq_amp;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -1006,7 +1006,7 @@ void send_ecep_evnt_R_cen_freq_amp(float f32_center_freq_amp)
 {
     sIntern_event_setup_t event;
 
-    event.u8_id = ECEP_EVNT_RIGHT_CEN_FREQ_AMP;
+    event.u8_id                  = ECEP_EVNT_RIGHT_CEN_FREQ_AMP;
     event.param.f32_cen_freq_amp = f32_center_freq_amp;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -1020,7 +1020,7 @@ void send_ecep_evnt_mic_range(eFFT_hw_gain_stage_t hw_gain_stage)
 {
     sIntern_event_setup_t event;
 
-    event.u8_id = ECEP_EVNT_MIC_RANGE;
+    event.u8_id       = ECEP_EVNT_MIC_RANGE;
     event.param.range = hw_gain_stage;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)

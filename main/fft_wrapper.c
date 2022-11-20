@@ -1,14 +1,14 @@
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
-#include <math.h>
 
 #include "esp_dsp.h"
-#include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_log.h"
 
-#include "fft_wrapper.h"
 #include "common_defines.h"
 #include "ecep_defines.h"
+#include "fft_wrapper.h"
 
 static const char *TAG = "fft_wrapper";
 
@@ -52,8 +52,8 @@ typedef struct
 
 static s_correction_factors_t gs_correction_factors;
 
-static int32_t i32_N = DATA_BLOCK_SIZE; // gs_ FORAN??? måske kand andet end N, da det ikke er bin størrelsen
-static bool gs_init_called = false;
+static int32_t i32_N          = DATA_BLOCK_SIZE; // gs_ FORAN??? måske kand andet end N, da det ikke er bin størrelsen
+static bool    gs_init_called = false;
 
 // Window coefficients:
 __attribute__((aligned(16))) static float gs_af32_wind[DATA_BLOCK_SIZE];
@@ -113,32 +113,32 @@ static esp_err_t calc_wind_correction_factors()
 
     // Hanning:
     dsps_wind_hann_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_hann_ampl = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_hann_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
     gs_correction_factors.f32_hann_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
 
     // Blackman:
     dsps_wind_blackman_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_blackman_ampl = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_blackman_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
     gs_correction_factors.f32_blackman_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
 
     // Blackman_harris:
     dsps_wind_blackman_harris_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_blackman_harris_ampl = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_blackman_harris_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
     gs_correction_factors.f32_blackman_harris_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
 
     // Blackman_nuttall:
     dsps_wind_blackman_nuttall_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_blackman_nuttall_ampl = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_blackman_nuttall_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
     gs_correction_factors.f32_blackman_nuttall_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
 
     // Nuttall:
     dsps_wind_nuttall_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_nuttall_ampl = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_nuttall_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
     gs_correction_factors.f32_nuttall_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
 
     // Flat_top:
     dsps_wind_flat_top_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_flat_top_ampl = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
+    gs_correction_factors.f32_flat_top_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
     gs_correction_factors.f32_flat_top_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
 
     free(pf32_temp_wind_array); // release the memory for the wind array that is no longer needed.

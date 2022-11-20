@@ -2,53 +2,53 @@
 #include <string.h> // For memcpy()
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 
-#include "esp_log.h"
 #include "driver/gpio.h"
 #include "esp_dsp.h" // FOR TEST
+#include "esp_log.h"
 
-#include "dsp.h"
 #include "common_defines.h"
-#include "fft_wrapper.h"
+#include "dsp.h"
 #include "ecep_defines.h"
 #include "ecep_uart.h" // For convenience functions used to access the ecep event queue
+#include "fft_wrapper.h"
 
 static const char *DSP_TAG = "DSP.C";
 
 #define RADIX_USED radix4 // eFFT_radix_type_t      (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
 
 // For hardware gain stage gpio multiplexing:
-#define GPIO_NUM_RANGE_SWITCH_L 5      // Used to multiplex between the two hardware gain stages for left audio channel
-#define GPIO_NUM_RANGE_SWITCH_R 4      // Used to multiplex between the two hardware gain stages for left audio channel
-#define GPIO_LVL_UP_TO_90DB GPIO_LOW   // GPIO level used to select the "up to 90dB" hardware gain stage
-#define GPIO_LVL_UP_TO_120DB GPIO_HIGH // GPIO level used to select the "up to 120dB" hardware gain stage
+#define GPIO_NUM_RANGE_SWITCH_L 5         // Used to multiplex between the two hardware gain stages for left audio channel
+#define GPIO_NUM_RANGE_SWITCH_R 4         // Used to multiplex between the two hardware gain stages for left audio channel
+#define GPIO_LVL_UP_TO_90DB     GPIO_LOW  // GPIO level used to select the "up to 90dB" hardware gain stage
+#define GPIO_LVL_UP_TO_120DB    GPIO_HIGH // GPIO level used to select the "up to 120dB" hardware gain stage
 
 // Default user settings:
 #define DFLT_FFT_OUTPUT_FORMAT ampltitude_dB_SPL // eFFT_output_form_t     Default output format
-#define DFLT_WIND_USED hann                      // eFFT_window_type_t     Default window type
+#define DFLT_WIND_USED         hann              // eFFT_window_type_t     Default window type
 #define DFLT_FFT_AVG_MAX_COUNT 5                 // Default amount of FFT result blocks to average before passing it on.
-#define DFLT_HW_GAIN_STAGE up_to_90dB_SPL        // eFFT_hw_gain_stage_t   Default Hardware Gain stage
-#define DFLT_WIND_CORR_FACTOR amplitude          // eFFT_window_correction_factor_t Default window correction factor type
+#define DFLT_HW_GAIN_STAGE     up_to_90dB_SPL    // eFFT_hw_gain_stage_t   Default Hardware Gain stage
+#define DFLT_WIND_CORR_FACTOR  amplitude         // eFFT_window_correction_factor_t Default window correction factor type
 
 // Declare settings variables with default values:
-eFFT_output_form_t gs_fft_out_format = DFLT_FFT_OUTPUT_FORMAT;
-eFFT_window_type_t gs_window_used = DFLT_WIND_USED;
-int32_t gs_i32_fft_avg_max_cnt = DFLT_FFT_AVG_MAX_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
-eFFT_wind_corr_factor_t gs_wind_corr_factor = DFLT_WIND_CORR_FACTOR;
-eFFT_hw_gain_stage_t gs_hw_gain_stage = DFLT_HW_GAIN_STAGE;
+eFFT_output_form_t      gs_fft_out_format      = DFLT_FFT_OUTPUT_FORMAT;
+eFFT_window_type_t      gs_window_used         = DFLT_WIND_USED;
+int32_t                 gs_i32_fft_avg_max_cnt = DFLT_FFT_AVG_MAX_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
+eFFT_wind_corr_factor_t gs_wind_corr_factor    = DFLT_WIND_CORR_FACTOR;
+eFFT_hw_gain_stage_t    gs_hw_gain_stage       = DFLT_HW_GAIN_STAGE;
 
 uint32_t gs_u32_total_fft_dur_ms; // The total duration of the averaged FFT result in ms
 
-static float *gs_pf32_adc1_shared;
-static float *gs_pf32_adc2_shared;
+static float            *gs_pf32_adc1_shared;
+static float            *gs_pf32_adc2_shared;
 static SemaphoreHandle_t gs_adc1_shared_mem_sem;
 static SemaphoreHandle_t gs_adc2_shared_mem_sem;
 
-static float *gs_pf32_L_fft_res_shr;
-static float *gs_pf32_R_fft_res_shr;
+static float            *gs_pf32_L_fft_res_shr;
+static float            *gs_pf32_R_fft_res_shr;
 static SemaphoreHandle_t gs_fft_L_res_shr_mem_sem;
 static SemaphoreHandle_t gs_fft_R_res_shr_mem_sem;
 
@@ -63,8 +63,8 @@ __attribute__((aligned(16))) static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE]
 // Stores the latest center frequency indexes and values:
 static uint32_t gs_u32_L_cent_freq_hz;
 static uint32_t gs_u32_R_cent_freq_hz;
-static float gs_f32_L_cent_freq_val;
-static float gs_f32_R_cent_freq_val;
+static float    gs_f32_L_cent_freq_val;
+static float    gs_f32_R_cent_freq_val;
 
 // For Spectral Estimation: Welch's method is used with 0% overlap
 
@@ -95,8 +95,8 @@ static void set_hw_gain_stage_gpios(eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
 
 static void find_cent_freq(float *array, int32_t array_size, uint32_t *p_cent_freq_hz, float *p_cent_freq_val)
 {
-    float temp_val;
-    float biggest_val = 0;
+    float   temp_val;
+    float   biggest_val       = 0;
     int32_t biggest_val_index = 0xFFFFFF;
 
     for (int32_t i = 0; i < array_size; i++)
@@ -104,18 +104,18 @@ static void find_cent_freq(float *array, int32_t array_size, uint32_t *p_cent_fr
         temp_val = array[i];
         if (temp_val > biggest_val)
         {
-            biggest_val = temp_val;
+            biggest_val       = temp_val;
             biggest_val_index = i;
         }
     }
 
     *p_cent_freq_val = biggest_val;
-    *p_cent_freq_hz = biggest_val_index * (ADC_SAMPLING_FREQ / (DATA_BLOCK_SIZE)); /*  Bin_freq = Bin_nr * (fs / N).
-                                                                                    (DATA_BLOCK_SIZE is used instead of DATA_BLOCK_SIZE/2 even though DATA_BLOCK_SIZE/2 is the size of the FFT result.
-                                                                                     This is because the half sized FFT result is single sided and goes from 0 - fny. The Bin_nr to Bin_freq expression uses the range to fs (not fny),
-                                                                                     so we use the full DATA_BLOCK_SIZE in the expression)
-                                                                                 */
-                                                                                   // (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
+    *p_cent_freq_hz  = biggest_val_index * (ADC_SAMPLING_FREQ / (DATA_BLOCK_SIZE)); /*  Bin_freq = Bin_nr * (fs / N).
+                                                                                     (DATA_BLOCK_SIZE is used instead of DATA_BLOCK_SIZE/2 even though DATA_BLOCK_SIZE/2 is the size of the FFT result.
+                                                                                      This is because the half sized FFT result is single sided and goes from 0 - fny. The Bin_nr to Bin_freq expression uses the range to fs (not fny),
+                                                                                      so we use the full DATA_BLOCK_SIZE in the expression)
+                                                                                  */
+                                                                                    // (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
     // ESP_LOGI(DSP_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
 }
 
@@ -142,13 +142,13 @@ static void find_cent_freq(float *array, int32_t array_size, uint32_t *p_cent_fr
 
 void dsp_ecep_handler_task()
 {
-    eFFT_output_form_t output_form_temp;
-    eFFT_window_type_t wind_type_temp;
+    eFFT_output_form_t      output_form_temp;
+    eFFT_window_type_t      wind_type_temp;
     eFFT_wind_corr_factor_t wind_corr_fact_temp;
-    eFFT_hw_gain_stage_t hw_gain_stage_temp;
+    eFFT_hw_gain_stage_t    hw_gain_stage_temp;
 
     sIntern_command_setup_t dsp_ecep_command;
-    uint8_t u8_ecep_cmd_id;
+    uint8_t                 u8_ecep_cmd_id;
 
     while (1)
     {
@@ -504,23 +504,23 @@ void dsp_right_ch_task()
     }
 }
 
-void dsp_init(float *pf32_adc1_shared,
-              float *pf32_adc2_shared,
+void dsp_init(float            *pf32_adc1_shared,
+              float            *pf32_adc2_shared,
               SemaphoreHandle_t adc1_shared_mem_sem,
               SemaphoreHandle_t adc2_shared_mem_sem,
-              float *pf32_L_fft_res_shr,
-              float *pf32_R_fft_res_shr,
+              float            *pf32_L_fft_res_shr,
+              float            *pf32_R_fft_res_shr,
               SemaphoreHandle_t fft_L_res_shr_mem_sem,
               SemaphoreHandle_t fft_R_res_shr_mem_sem,
-              QueueHandle_t xQueue_dsp_ecep_cmds)
+              QueueHandle_t     xQueue_dsp_ecep_cmds)
 {
-    gs_pf32_adc1_shared = pf32_adc1_shared;
-    gs_pf32_adc2_shared = pf32_adc2_shared;
+    gs_pf32_adc1_shared    = pf32_adc1_shared;
+    gs_pf32_adc2_shared    = pf32_adc2_shared;
     gs_adc1_shared_mem_sem = adc1_shared_mem_sem;
     gs_adc2_shared_mem_sem = adc2_shared_mem_sem;
 
-    gs_pf32_L_fft_res_shr = pf32_L_fft_res_shr;
-    gs_pf32_R_fft_res_shr = pf32_R_fft_res_shr;
+    gs_pf32_L_fft_res_shr    = pf32_L_fft_res_shr;
+    gs_pf32_R_fft_res_shr    = pf32_R_fft_res_shr;
     gs_fft_L_res_shr_mem_sem = fft_L_res_shr_mem_sem;
     gs_fft_R_res_shr_mem_sem = fft_R_res_shr_mem_sem;
 
@@ -529,10 +529,10 @@ void dsp_init(float *pf32_adc1_shared,
     // GPIO setup for hardware gain stage multiplexing:
     gpio_config_t io_conf = {
         .pin_bit_mask = ((1 << GPIO_NUM_RANGE_SWITCH_L) | (1 << GPIO_NUM_RANGE_SWITCH_R)),
-        .intr_type = GPIO_INTR_DISABLE,        // disable interrupts.
-        .mode = GPIO_MODE_INPUT_OUTPUT,        // Set as output/input mode.
-        .pull_down_en = GPIO_PULLDOWN_DISABLE, // Disable pull up.
-        .pull_up_en = GPIO_PULLUP_ENABLE,      // Disable pull down.
+        .intr_type    = GPIO_INTR_DISABLE,      // disable interrupts.
+        .mode         = GPIO_MODE_INPUT_OUTPUT, // Set as output/input mode.
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,  // Disable pull up.
+        .pull_up_en   = GPIO_PULLUP_ENABLE,     // Disable pull down.
     };
     ESP_ERROR_CHECK(gpio_config(&io_conf));
     set_hw_gain_stage_gpios(DFLT_HW_GAIN_STAGE);
