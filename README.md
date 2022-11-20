@@ -28,18 +28,18 @@ This project is created for the ESP32-S3 \
 
 ## List of menuconfig changes:
 - CPU frequency:      240MHz (default: 160MHz) 
-\
+
 - Maximum FFT length: 4096   (default: 4096) 
-\
+
 - Bootloader log verbosity: No output (default: info) 
 - Permanently change Boot ROM output: Permanently disable logging (default: Always log) 
-\
+
 - Channel for console output: Custom UART (default: UART0) 
 - UART peripheral to use for console output (0-1): UART1 (default: UART0) 
 - UART TX on GPIO: 10 (default: 43) 
 - UART RX on GPIO: 11 (default: 44) 
 - UART console baud rate: 230400 (default: 115200) (this value for some reason needs to be double of the wished baud. idk why. aka the actual baud --> 230400/2 = 115200) 
-\
+
 - Support for external, SPI-connected RAM: Enable (default: Disabled) (Ops: requires ESP32 module with PSRAM) 
 - Mode (QUAD/OCT) of SPI RAM chip in use: Octal Mode PSRAM (Default: Quad mode PSRAM) (Ops: requires ESP32 module with support for Octal mode SPI PSRAM) 
 - Set RAM clock speed: 80MHz clock speed (default: 40MHz clock speed) 
