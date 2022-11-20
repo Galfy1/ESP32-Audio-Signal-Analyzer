@@ -11,11 +11,15 @@ ASD
     2. Run "git submodule update" git command
 3. Run the following command from the vscode command pallette (Ctrl-Shift-P):
     1. ESP-IDF: Add vscode configuration folder
-4. Use the Espressif IDF extension bar at the buttom of VS Code to build and flash. Monitoring via the "USB-to-UART" port on the ESP32-S3-DevKitC-1 is not possible for this project since UART0 is repurposed for ECEP (a custom command event protocol). For monitoring / debug-console via the uart please use GPIO 11(RX) and GPIO 10(TX).
+5. Use the Espressif IDF extension bar at the buttom of VS Code to build and flash.   
  
 (An alternative to step 1 and 2 is to pass --recurse-submodules to the git clone command. This will automatically initialize and update each submodule in the repository) \
 
-Note: "git submodule update --remote" git command can be used to fetch and merge newest changes for the submodules.
+**Notes**: 
+    -Monitoring via the "USB-to-UART" port on the ESP32-S3-DevKitC-1 is not possible for this project since UART0 is repurposed for ECEP (a custom command event protocol).
+    -For monitoring / debug-console via the uart please use GPIO 11(RX) and GPIO 10(TX).
+    -For consistant code formatting please see the "formatting" section of this readme file.
+    -"git submodule update --remote" git command can be used to fetch and merge newest changes for the submodules.
 
 ## Required Hardware
 This project is created for the ESP32-S3 \
@@ -50,6 +54,14 @@ This project is created for the ESP32-S3 \
 - IO26: PSRAM CS IO number (The default. Can be changed in menuconfig if needed) 
 
 !LIST NOT COMPLETE!
+
+## Formatting
+Clang is used for formatting. For this project a .clang-format file has been added based on the "Visual Studio" predefined clang style. \
+
+**Using Clang in vscode**:
+The standard c/c++ extension in vscode supports clang. Remember to set "c/c++" as "default formatter" in vscode settings. "Format On Save" can also be enabled in vscode settings. 
+Remember that if vscode settings are applied at a "workspace" level they are stored in settings.json (aka they will be wiped if settings.json is deleted).
+If no .clang-format file is present in the parent directery, then the c/c++ extention will use the predefined style specified in "Clang_format_fallback Style" in vscode settings. 
 
 ## ESP-IDF Version
 This project is created on ESP-IDF 5.0

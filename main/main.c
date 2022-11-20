@@ -2,18 +2,18 @@
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 
-#include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_log.h"
 
-#include "common_defines.h"
 #include "adc.h"
+#include "common_defines.h"
 #include "dsp.h"
-#include "ecep_uart.h"
 #include "ecep_defines.h"
+#include "ecep_uart.h"
 #include "patient_response.h"
 
 static const char *TAG = "main.c";
@@ -61,8 +61,8 @@ void app_main(void)
     memset(pf32_R_fft_res_shr, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
 
     // Create sempahores:
-    SemaphoreHandle_t adc1_shared_mem_sem = xSemaphoreCreateMutex();   // Mutex for gs_af32_adc1_shared
-    SemaphoreHandle_t adc2_shared_mem_sem = xSemaphoreCreateMutex();   // Mutex for gs_af32_adc2_shared
+    SemaphoreHandle_t adc1_shared_mem_sem   = xSemaphoreCreateMutex(); // Mutex for gs_af32_adc1_shared
+    SemaphoreHandle_t adc2_shared_mem_sem   = xSemaphoreCreateMutex(); // Mutex for gs_af32_adc2_shared
     SemaphoreHandle_t fft_L_res_shr_mem_sem = xSemaphoreCreateMutex(); // Mutex for gs_af32_L_fft_res_shr
     SemaphoreHandle_t fft_R_res_shr_mem_sem = xSemaphoreCreateMutex(); // Mutex for gs_af32_R_fft_res_shr
     if ((adc1_shared_mem_sem == NULL) || (adc2_shared_mem_sem == NULL) || (fft_L_res_shr_mem_sem == NULL) || (fft_R_res_shr_mem_sem == NULL))
@@ -71,7 +71,7 @@ void app_main(void)
     }
 
     // Create queues:
-    xQueue_pr_ecep_cmds = xQueueCreate(10, sizeof(sIntern_command_setup_t));
+    xQueue_pr_ecep_cmds  = xQueueCreate(10, sizeof(sIntern_command_setup_t));
     xQueue_dsp_ecep_cmds = xQueueCreate(10, sizeof(sIntern_command_setup_t));
     if ((xQueue_pr_ecep_cmds == NULL) || (xQueue_dsp_ecep_cmds == NULL))
     {

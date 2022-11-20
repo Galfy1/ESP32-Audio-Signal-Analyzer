@@ -2,14 +2,14 @@
 #include <string.h> // For memcpy()
 
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 
-#include "esp_log.h"
-#include "esp_adc/adc_continuous.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
+#include "esp_adc/adc_continuous.h"
+#include "esp_log.h"
 
 #include "adc.h"
 #include "common_defines.h"
@@ -22,7 +22,7 @@ static const char *ADC_TAG = "ADC.C";
 #define ADC_1_CHANNEL ADC_CHANNEL_6 // GPIO 7
 #define ADC_2_CHANNEL ADC_CHANNEL_6 // GPIO 17
 
-#define ADC_CONV_MODE ADC_CONV_BOTH_UNIT
+#define ADC_CONV_MODE   ADC_CONV_BOTH_UNIT
 #define CONV_FRAME_SIZE 256 // In bytes
 // ADC_SAMPLING_FREQ and ADC_ATTEN_DB is located in common_defines.h
 
@@ -72,12 +72,12 @@ void adc_task()
 
     adc_cali_handle_t adc1_cali_handle = NULL;
     adc_cali_handle_t adc2_cali_handle = NULL;
-    int adc1_temp_voltage; // int to match the adc_cali_raw_to_voltage() input type
-    int adc2_temp_voltage;
+    int               adc1_temp_voltage; // int to match the adc_cali_raw_to_voltage() input type
+    int               adc2_temp_voltage;
 
     esp_err_t ret;
-    uint32_t ret_num = 0;
-    uint8_t conv_frame[CONV_FRAME_SIZE] = {0};
+    uint32_t  ret_num                     = 0;
+    uint8_t   conv_frame[CONV_FRAME_SIZE] = {0};
 
     memset(conv_frame, 0xcc, sizeof(conv_frame)); // ikke sikker på hvorfor vi sætter dem til 0xcc (0b11001100)
 
@@ -89,28 +89,28 @@ void adc_task()
     // Create ADC handle:
     adc_continuous_handle_cfg_t adc_config = {
         .max_store_buf_size = 1024,
-        .conv_frame_size = CONV_FRAME_SIZE,
+        .conv_frame_size    = CONV_FRAME_SIZE,
     };
     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_config, &adc_handle));
 
     adc_continuous_config_t dig_cfg = {
         .sample_freq_hz = ADC_SAMPLING_FREQ,
-        .conv_mode = ADC_CONV_MODE,
-        .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
+        .conv_mode      = ADC_CONV_MODE,
+        .format         = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
     };
 
     // Config ADC handle:
     adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX] = {0};
-    dig_cfg.pattern_num = 2;
+    dig_cfg.pattern_num                                         = 2;
 
-    adc_pattern[0].atten = ADC_ATTEN_DB;
-    adc_pattern[0].channel = ADC_1_CHANNEL;
-    adc_pattern[0].unit = ADC_UNIT_1; // ADC 1
+    adc_pattern[0].atten     = ADC_ATTEN_DB;
+    adc_pattern[0].channel   = ADC_1_CHANNEL;
+    adc_pattern[0].unit      = ADC_UNIT_1; // ADC 1
     adc_pattern[0].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
-    adc_pattern[1].atten = ADC_ATTEN_DB;
-    adc_pattern[1].channel = ADC_2_CHANNEL;
-    adc_pattern[1].unit = ADC_UNIT_2; // ADC 2
+    adc_pattern[1].atten     = ADC_ATTEN_DB;
+    adc_pattern[1].channel   = ADC_2_CHANNEL;
+    adc_pattern[1].unit      = ADC_UNIT_2; // ADC 2
     adc_pattern[1].bit_width = SOC_ADC_DIGI_MAX_BITWIDTH;
 
     dig_cfg.adc_pattern = adc_pattern;
@@ -125,13 +125,13 @@ void adc_task()
 
     // ADC calibration:
     adc_cali_curve_fitting_config_t cali_config_1 = {
-        .unit_id = ADC_UNIT_1,
-        .atten = ADC_ATTEN_DB,
+        .unit_id  = ADC_UNIT_1,
+        .atten    = ADC_ATTEN_DB,
         .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
     };
     adc_cali_curve_fitting_config_t cali_config_2 = {
-        .unit_id = ADC_UNIT_2,
-        .atten = ADC_ATTEN_DB,
+        .unit_id  = ADC_UNIT_2,
+        .atten    = ADC_ATTEN_DB,
         .bitwidth = SOC_ADC_DIGI_MAX_BITWIDTH,
     };
     ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config_1, &adc1_cali_handle));
@@ -262,7 +262,7 @@ void adc_task()
 
 void adc_set_dsp_task_handles(TaskHandle_t dsp_left_task_handle, TaskHandle_t dsp_right_task_handle)
 {
-    gs_dsp_left_task_handle = dsp_left_task_handle;
+    gs_dsp_left_task_handle  = dsp_left_task_handle;
     gs_dsp_right_task_handle = dsp_right_task_handle;
 }
 

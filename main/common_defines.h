@@ -38,9 +38,9 @@
 // Og kald den SINGLE_SIDED_FFT_REAL_RES_SIZE eller noget lignene
 
 #define ADC_SAMPLING_FREQ 80 * 1000 // see soc caps file for max value (limited by the internal ADC's of the ESP32-S3)
-#define ADC_ATTEN_DB ADC_ATTEN_DB_6
+#define ADC_ATTEN_DB      ADC_ATTEN_DB_6
 
 #define GPIO_HIGH 1
-#define GPIO_LOW 0
+#define GPIO_LOW  0
 
 #endif /*COMMON_DEFINES_H_INCLUDED */
