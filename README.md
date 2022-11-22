@@ -18,7 +18,7 @@ ASD
 
 **Notes**: 
 - Monitoring via the "USB-to-UART" port on the ESP32-S3-DevKitC-1 is not possible for this project since UART0 is repurposed for ECEP (a custom command event protocol).
-- For monitoring / debug-console via the uart please use GPIO 11(RX) and GPIO 10(TX).
+- For monitoring / debug-console via the uart please use GPIO 02(RX) and GPIO 01(TX).
 - For consistant code formatting please see the "formatting" section of this readme file.
 - "git submodule update --remote" git command can be used to fetch and merge newest changes for the submodules.
 
@@ -56,10 +56,12 @@ This project is created for the ESP32-S3 \
   (default: "Make RAM allocatable using malloc() as well") 
 
 ## Used GPIO's
-- IO10: UART1 TX (debug terminal)
-- IO11: UART1 RX (debug terminal)
+- IO01: UART1 TX (debug terminal)
+- IO02: UART1 RX (debug terminal)
 - IO05: Gain stage multiplexer for left audio channel
 - IO04: Gain stage multiplexer for right audio channel
+- IO07: ADC1 (left audio channel)
+- IO17: ADC2 (right audio channel)
 - IO30: PSRAM CLK IO number (The default. Can be changed in menuconfig if needed) 
 - IO26: PSRAM CS IO number (The default. Can be changed in menuconfig if needed) 
 
