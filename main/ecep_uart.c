@@ -637,7 +637,7 @@ void ecep_uart_tx_task()
     while (1)
     {
 
-        if (xQueueReceive(gs_xQueue_ecep_events, &ecep_event, 0) == pdTRUE)
+        if (xQueueReceive(gs_xQueue_ecep_events, &ecep_event, (TickType_t)portMAX_DELAY) == pdTRUE)
         {
             packet_len = ECEP_HEADER_LEN;
 

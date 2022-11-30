@@ -110,12 +110,12 @@ static void find_cent_freq(float *array, int32_t array_size, uint32_t *p_cent_fr
     }
 
     *p_cent_freq_val = biggest_val;
-    *p_cent_freq_hz  = biggest_val_index * (ADC_SAMPLING_FREQ / (DATA_BLOCK_SIZE)); /*  Bin_freq = Bin_nr * (fs / N).
+    *p_cent_freq_hz  = biggest_val_index * ((float)ADC_SAMPLING_FREQ / (float)(DATA_BLOCK_SIZE)); /*  Bin_freq = Bin_nr * (fs / N). (remember float division)
                                                                                      (DATA_BLOCK_SIZE is used instead of DATA_BLOCK_SIZE/2 even though DATA_BLOCK_SIZE/2 is the size of the FFT result.
                                                                                       This is because the half sized FFT result is single sided and goes from 0 - fny. The Bin_nr to Bin_freq expression uses the range to fs (not fny),
                                                                                       so we use the full DATA_BLOCK_SIZE in the expression)
                                                                                   */
-                                                                                    // (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
+                                                                                                  // (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
     // ESP_LOGI(DSP_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
 }
 
