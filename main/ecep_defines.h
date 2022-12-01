@@ -3,6 +3,16 @@
 
 #include "common_defines.h"
 
+// ECEP: External Command Event Protocol
+
+// ######## ECEP HEADER ########
+// | Packet Type | Command/event code | Packet Length (low byte) | Packet Length (high byte) |
+//    (1 byte)         (1 byte)                 (1 byte)                    (1 byte)
+
+// ######## ECEP PACKAGE ########
+// |   Header   |   Cmd/Evt param struct   |   Bulk data   |
+//    (4 bytes)           (differ)              (differ)
+
 #define ECEP_HEADER_LEN 4 // Header length In bytes
 
 #define ECEP_MAX_CMD_PACKET_LEN 1000                                                 // Max packet length for an event packet in bytes.

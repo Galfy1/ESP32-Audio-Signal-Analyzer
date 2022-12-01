@@ -116,7 +116,7 @@ void app_main(void)
                                                                                                                This is done so the adc task can use direct task notification to syncronize use of the shared memory */
     xTaskCreatePinnedToCore(adc_task, "adc_task", 4096, NULL, 8, NULL, 0);                                  // Use CPU0 Core . ADC task needs the higher priority compared to other tasks
     xTaskCreatePinnedToCore(patient_resp_task, "patient_resp_task", 4096, NULL, 4, NULL, 1);                // Use CPU1 Core
-    xTaskCreatePinnedToCore(ecep_uart_event_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);               // Use CPU1 Core
+    xTaskCreatePinnedToCore(ecep_uart_rx_task, "ecep_uart_event", 4096, NULL, 4, NULL, 1);                  // Use CPU1 Core
     xTaskCreatePinnedToCore(ecep_uart_tx_task, "ecep_uart_tx_task", 4096, NULL, 4, NULL, 0);                // Use CPU0 Core. Used to set up packet and transmit through UART
     xTaskCreatePinnedToCore(ecep_rx_packet_handler_task, "ecep_rx_packet_handler", 8192, NULL, 4, NULL, 1); // Use CPU1 Core. (A stack size of 4096 is too small (will overflow))
     xTaskCreatePinnedToCore(dsp_ecep_handler_task, "dsp_ecep_handler_task", 4096, NULL, 4, NULL, 0);        // Use CPU0 Core. (A stack size of 2048 is too small (will overflow))

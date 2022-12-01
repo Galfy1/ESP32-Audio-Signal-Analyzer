@@ -62,6 +62,11 @@ static uint32_t gs_u32_R_cent_freq_hz;
 static float    gs_f32_L_cent_freq_val;
 static float    gs_f32_R_cent_freq_val;
 
+// Array is here 16bit alligned by the compiler in memory to eliminate any unsesessay memory accessesing overhead
+// See: http://www.songho.ca/misc/alignment/dataalign.html for more info
+__attribute__((aligned(16))) static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};
+__attribute__((aligned(16))) static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};
+
 // NESP IKKE TESTET:
 static void calc_fft_duration_ms()
 {
@@ -340,67 +345,63 @@ void dsp_ecep_handler_task()
 //     dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);
 // }
 
-void dsp_left_ch_task()
+static void dsp_loop(float *pf32_adc_temp_buf,
+                     float *pf32_adc_shared_mem, SemaphoreHandle_t adc_shared_mem_semaphore,
+                     uint32_t *pu32_cent_freq_hz, float *pu32_cent_freq_val,
+                     float *pf32_fft_res_shared_mem, SemaphoreHandle_t fft_res_shr_mem_semaphore)
 {
-    // Array is here 16bit alligned by the compiler in memory to eliminate any unsesessay memory accessesing overhead
-    // See: http://www.songho.ca/misc/alignment/dataalign.html for more info
-    __attribute__((aligned(16))) static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};
+    int32_t  i32_avg_counter = 0;
+    uint32_t ret;
 
     // A Place to compute the averaged FFT result (located is PSRAM):
-    float *pf32_L_fft_res_avg_array = heap_caps_malloc(DATA_BLOCK_SIZE / 2 * sizeof(float), MALLOC_CAP_SPIRAM);
-    if (pf32_L_fft_res_avg_array == NULL)
+    float *pf32_fft_res_avg_array = heap_caps_malloc(DATA_BLOCK_SIZE / 2 * sizeof(float), MALLOC_CAP_SPIRAM);
+    if (pf32_fft_res_avg_array == NULL)
     {
         ESP_LOGE(DSP_TAG, "ERROR: while allocating FFT res averaging array in PSRAM");
     }
-    memset(pf32_L_fft_res_avg_array, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
-
-    static int32_t i32_avg_counter = 0; // BEHØVER DEN VÆRE STATIC???
-    uint32_t       ret;
+    memset(pf32_fft_res_avg_array, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
 
     int32_t i32_asa_min_freq_idx = ((float)ASA_SPECIFICATION_MIN_FREQ / ((float)ADC_SAMPLING_FREQ / (float)DATA_BLOCK_SIZE)) - 1; /* Index location of ASA_SPECIFICATION_MIN_FREQ in fft res array
-                                                                                                                                     Bin_freq = Bin_nr * (fs / N) --> Bin_nr = Bin_freq / (fs / N) */
+                                                                                                                                 Bin_freq = Bin_nr * (fs / N) --> Bin_nr = Bin_freq / (fs / N) */
 
     // debugging_fft_test();
 
     while (1)
     {
-        ret = ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Block this task untill triggeret by adc task.
-
+        ret = ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Block the DSP task that called dsp_loop(), untill triggeret by adc task.
         if (ret > 1)
         {
-            ESP_LOGE(DSP_TAG, "Left dsp task is too slow! Number of missed ADC blocks: %d", (int)(ret - 1));
+            ESP_LOGE(DSP_TAG, "One or both DSP Tasks are too slow! Number of missed ADC blocks: %d", (int)(ret - 1));
         }
 
-        if (xSemaphoreTake(gs_adc1_shared_mem_sem, portMAX_DELAY) == pdTRUE)
+        if (xSemaphoreTake(adc_shared_mem_semaphore, portMAX_DELAY) == pdTRUE)
         {
-            memcpy(gs_af32_adc1_temp_buf, gs_pf32_adc1_shared, sizeof(gs_af32_adc1_temp_buf)); // Copy from shared memory to local copy
-            memset(gs_pf32_adc1_shared, 0, sizeof(gs_af32_adc1_temp_buf));                     // Reset the shared memory, just to be sure (gs_af32_adc1_temp_buf is same size as shared space array)
-            xSemaphoreGive(gs_adc1_shared_mem_sem);
+            memcpy(pf32_adc_temp_buf, pf32_adc_shared_mem, DATA_BLOCK_SIZE * sizeof(float)); // Copy from shared memory to local copy
+            memset(pf32_adc_shared_mem, 0, DATA_BLOCK_SIZE * sizeof(float));                 // Reset the shared memory, just to be sure
+            xSemaphoreGive(adc_shared_mem_semaphore);
 
             // Run FFT:
             if (gs_fft_out_format == ampltitude_dB_SPL)
             {
-                fft_wrapper_run_fft_tech3(gs_af32_adc1_temp_buf, RADIX_USED, ampltitude_mV, 0, gs_wind_corr_factor); /*  We dont want to average the dB SPL results since they are logarithmic,
+                fft_wrapper_run_fft_tech3(pf32_adc_temp_buf, RADIX_USED, ampltitude_mV, 0, gs_wind_corr_factor); /*  We dont want to average the dB SPL results since they are logarithmic,
                                                                                                     so we wait to convert to dB SPL untill after averageing) */
             }
             else
             {
-                fft_wrapper_run_fft_tech3(gs_af32_adc1_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage, gs_wind_corr_factor);
+                fft_wrapper_run_fft_tech3(pf32_adc_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage, gs_wind_corr_factor);
             }
 
             // Remove everything before ASA_SPECIFICATION_MIN_FREQ since its out of spec:
             // This will also remove unwanted DC-offset (DC-offset was added by our hardware. aka not a part of the original signal)
             for (int32_t i = 0; i < i32_asa_min_freq_idx; i++)
             {
-                gs_af32_adc1_temp_buf[i] = 0;
+                pf32_adc_temp_buf[i] = 0;
             }
-            // gs_af32_adc1_temp_buf[0] = 0;
-            // gs_af32_adc1_temp_buf[1] = 0;
 
             // Add result into averaging array (remember that only half of gs_af32_adc1_temp_buf is amplitude values. rest is junk):
             for (int32_t i = 0; i < DATA_BLOCK_SIZE / 2; i++)
             {
-                pf32_L_fft_res_avg_array[i] += gs_af32_adc1_temp_buf[i];
+                pf32_fft_res_avg_array[i] += pf32_adc_temp_buf[i];
             }
             i32_avg_counter++;
 
@@ -410,56 +411,47 @@ void dsp_left_ch_task()
                 // Divide array by gs_i32_fft_avg_max_cnt to average:
                 for (int32_t i = 0; i < DATA_BLOCK_SIZE / 2; i++)
                 {
-                    pf32_L_fft_res_avg_array[i] /= gs_i32_fft_avg_max_cnt;
+                    pf32_fft_res_avg_array[i] /= gs_i32_fft_avg_max_cnt;
                 }
 
                 // Convert averaged result to dB SPL if necessaery (remember that we originally requested the fft res in mV. This was so we could average them easily):
                 if (gs_fft_out_format == ampltitude_dB_SPL)
                 {
-                    conv_ampl_mv_to_ampl_db_spl(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE / 2, gs_hw_gain_stage);
+                    conv_ampl_mv_to_ampl_db_spl(pf32_fft_res_avg_array, DATA_BLOCK_SIZE / 2, gs_hw_gain_stage);
                 }
 
                 // Find center frequency:
-                find_cent_freq(pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE / 2, &gs_u32_L_cent_freq_hz, &gs_f32_L_cent_freq_val);
+                find_cent_freq(pf32_fft_res_avg_array, DATA_BLOCK_SIZE / 2, pu32_cent_freq_hz, pu32_cent_freq_val);
 
                 // Copy FFT averaged result from local copy into shared memory:
-                if (xSemaphoreTake(gs_fft_L_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
+                if (xSemaphoreTake(fft_res_shr_mem_semaphore, portMAX_DELAY) == pdTRUE)
                 {
-                    memcpy(gs_pf32_L_fft_res_shr, pf32_L_fft_res_avg_array, DATA_BLOCK_SIZE / 2 * sizeof(float));
-                    xSemaphoreGive(gs_fft_L_res_shr_mem_sem);
+                    memcpy(pf32_fft_res_shared_mem, pf32_fft_res_avg_array, DATA_BLOCK_SIZE / 2 * sizeof(float));
+                    xSemaphoreGive(fft_res_shr_mem_semaphore);
                 }
 
                 // Reset counter and averaging array:
                 i32_avg_counter = 0;
-                memset(pf32_L_fft_res_avg_array, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
+                memset(pf32_fft_res_avg_array, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
             }
         }
     }
 }
 
+void dsp_left_ch_task()
+{
+    dsp_loop(gs_af32_adc1_temp_buf,
+             gs_pf32_adc1_shared, gs_adc1_shared_mem_sem,
+             &gs_u32_L_cent_freq_hz, &gs_f32_L_cent_freq_val,
+             gs_pf32_L_fft_res_shr, gs_fft_L_res_shr_mem_sem);
+}
+
 void dsp_right_ch_task()
 {
-    __attribute__((aligned(16))) static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};
-
-    while (1)
-    {
-
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
-        if (xSemaphoreTake(gs_adc2_shared_mem_sem, portMAX_DELAY) == pdTRUE)
-        {
-            memcpy(gs_af32_adc2_temp_buf, gs_pf32_adc2_shared, sizeof(gs_af32_adc2_temp_buf)); // Copy from shared memory to local copy
-            memset(gs_pf32_adc2_shared, 0, sizeof(gs_af32_adc2_temp_buf));                     // Reset the shared memory
-            xSemaphoreGive(gs_adc2_shared_mem_sem);
-
-            fft_wrapper_run_fft_tech3(gs_af32_adc2_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage, gs_wind_corr_factor); // Run FFT
-            if (xSemaphoreTake(gs_fft_R_res_shr_mem_sem, portMAX_DELAY) == pdTRUE)
-            {
-                memcpy(gs_pf32_R_fft_res_shr, gs_af32_adc2_temp_buf, sizeof(gs_af32_adc2_temp_buf) / 2); // Copy FFT result from local copy to shared memory
-                xSemaphoreGive(gs_fft_R_res_shr_mem_sem);
-            }
-        }
-    }
+    dsp_loop(gs_af32_adc2_temp_buf,
+             gs_pf32_adc2_shared, gs_adc2_shared_mem_sem,
+             &gs_u32_R_cent_freq_hz, &gs_f32_R_cent_freq_val,
+             gs_pf32_R_fft_res_shr, gs_fft_R_res_shr_mem_sem);
 }
 
 void dsp_init(float            *pf32_adc1_shared,

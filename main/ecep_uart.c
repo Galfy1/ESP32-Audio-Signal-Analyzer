@@ -18,18 +18,18 @@ static const char *TAG = "ecep_uart.c";
 // (Debug console is moved from UART0 to UART1 in menuconfig)
 
 #define ECEP_UART_NUM      UART_NUM_0               // Uart 0: The uart routed to the uart<->usb chip on the ESP32-S3 dev-kit-c (aka the "uart" usb port)
-#define ECEP_UART_CFG_BAUD 921600                   // Lave test til at se hvor hurtig vi kan slippe afsted med uden stor fejl
+#define ECEP_UART_CFG_BAUD 921600                   // Error ratio for 921600 (ratio between wished and actual baud): 1.000640  (found using baud_error_test())
 #define ECEP_UART_CFG_FC   UART_HW_FLOWCTRL_DISABLE // Flow control (usb<->uart chip on esp32-s3 devkit-c is not hooked up to CTS)
 #define ECEP_TXD_PIN       43                       // (GPIO --> UART0 TX. aka uart-usb-port on devkit-c)
 #define ECEP_RXD_PIN       44                       // (GPIO --> UART0 TX. aka uart-usb-port on devkit-c)
 #define ECEP_RTS_PIN       UART_PIN_NO_CHANGE       // Not used if HW flowcontrol is disabled
 #define ECEP_CTS_PIN       UART_PIN_NO_CHANGE       // Not used if HW flowcontrol is disabled
 
-#define BUF_SIZE         1024 // Ved ikke om det bliver et problem hvis den her er under størrelsen på en command pakke? Måske ikke Finder vi måske aldrig ud af, da vi ikke har en command pakke over 1024 i størrelse anyway.
+#define BUF_SIZE         1024
 #define UART_RD_BUF_SIZE BUF_SIZE
 
-static QueueHandle_t ecep_uart_queue;   // Queue for uart api
-static QueueHandle_t ecep_data_len_que; // Queue used to syncronize ecep_rx_packet_handler_task() from ecep_uart_event_task()
+static QueueHandle_t ecep_uart_rx_queue; // Queue for uart api
+static QueueHandle_t ecep_data_len_que;  // Queue used to syncronize ecep_rx_packet_handler_task() from ecep_uart_rx_task()
 
 static QueueHandle_t gs_xQueue_ecep_events;   // Queue for ECEP events
 static QueueHandle_t gs_xQueue_pr_ecep_cmds;  // Queue for Patient Response ECEP commands
@@ -50,17 +50,11 @@ static SemaphoreHandle_t gs_fft_R_res_shr_mem_sem;
 
 static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and_bulk, uint16_t u16_params_and_bulk_len)
 {
-
-    // for(int32_t i = 0; i < u16_params_and_bulk_len ; i++)
-    // {
-    //     ESP_LOGI(TAG, "0x%04x", pv_params_and_bulk[i]);
-    // }
-
     /* Note : No command currently uses bulk data
                 (if bulk data for a command is needed in the future, add a Queue or Mutex protetected Shared Memory to pass to the relevenat task.
                 for now: no need to have allocated shamed memory for bulk data if no command uses it.
                 ECEP_MAX_CMD_PACKET_LEN would also have to be increase if the new packet with bulk exceeds this size. consider creating the u8_packet_data array
-                in PSRAM if the size gets too big)
+                in PSRAM if the size gets too big. Also look into if BUF_SIZE needs to be increased (might not need to))
     */
 
     sIntern_command_setup_t sIntern_command_setup;
@@ -445,9 +439,9 @@ void ecep_rx_packet_handler_task()
 
                     if (u32_package_byte_counter == ECEP_HEADER_LEN) // Header has been fully read
                     {
-                        u8_packet_type  = u8_packet_data[0];
-                        u8_command_code = u8_packet_data[1];
-                        u16_packet_len  = u8_packet_data[2] | (u8_packet_data[3] << 8);
+                        u8_packet_type  = u8_packet_data[TX_PACKET_TYPE_BYTE];
+                        u8_command_code = u8_packet_data[TX_PACKET_CMD_EVNT_BYTE];
+                        u16_packet_len  = u8_packet_data[TX_PACKET_PACK_LEN_LOW_BYTE] | (u8_packet_data[TX_PACKET_PACK_LEN_HIGH_BYTE] << 8);
 
                         ESP_LOGI(TAG, "Received Packet - u8_packet_type:  0x%04x", (unsigned int)u8_packet_type);
                         ESP_LOGI(TAG, "Received Packet - u8_command_code: 0x%04x", (unsigned int)u8_command_code);
@@ -475,23 +469,14 @@ void ecep_rx_packet_handler_task()
                     remaining_data_len    = u32_data_len - byte_counter;
                     chunk_size_to_cpy     = (remaining_package_len < remaining_data_len ? remaining_package_len : remaining_data_len); // chunk size to copy is limited by either u16_packet_len or u32_data_len
 
-                    // ESP_LOGE(TAG, "remaining_package_len: %i", (int) remaining_package_len);
-                    // ESP_LOGE(TAG, "remaining_data_len: %i", (int) remaining_data_len);
-                    // ESP_LOGE(TAG, "chunk_size_to_cpy: %i", (int) chunk_size_to_cpy);
-                    // ESP_LOGE(TAG, "u8_packet_data[u32_package_byte_counter]: %i", (int) u8_packet_data[u32_package_byte_counter]);
-                    // ESP_LOGE(TAG, "u32_package_byte_counter: %i", (int) u32_package_byte_counter);
-
                     memcpy(&u8_packet_data[u32_package_byte_counter], &au8_raw_uart_copy[byte_counter], chunk_size_to_cpy);
 
                     u32_package_byte_counter += chunk_size_to_cpy;
                     byte_counter += chunk_size_to_cpy;
-
-                    // ESP_LOGE(TAG, "u32_package_byte_counter 2: %i", (int) u32_package_byte_counter);
                 }
 
                 if ((u32_package_byte_counter >= ECEP_HEADER_LEN) && (u32_package_byte_counter == u16_packet_len)) // Packet assembly complete
                 {
-                    // ESP_LOGI(TAG, "Jamen Okay da ASDASD");
                     ecep_command_handler(u8_command_code, &u8_packet_data[4], u16_packet_len - ECEP_HEADER_LEN); // Pass packet without header
 
                     // Reset Package byte counter and data:
@@ -503,15 +488,16 @@ void ecep_rx_packet_handler_task()
     }
 }
 
-// Note: "uart events" refeers to the esp uart api. Dont confuse this "event" with ECEP events.
-void ecep_uart_event_task() // GIV ANDET NAVN!
+void ecep_uart_rx_task()
 {
+    // Note: "uart events" in this task refeers to the esp uart api. Dont confuse this "event" with ECEP events.
+
     uart_event_t event;
 
     while (1)
     {
         //  Waiting for UART event.
-        if (xQueueReceive(ecep_uart_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+        if (xQueueReceive(ecep_uart_rx_queue, (void *)&event, (TickType_t)portMAX_DELAY))
         {
             switch (event.type)
             {
@@ -555,7 +541,7 @@ void ecep_uart_event_task() // GIV ANDET NAVN!
                 // The ISR has already reset the rx FIFO,
                 // As an example, we directly flush the rx buffer here in order to read more data.
                 uart_flush_input(ECEP_UART_NUM);
-                xQueueReset(ecep_uart_queue);
+                xQueueReset(ecep_uart_rx_queue);
                 break;
 
             // Event of UART ring buffer full
@@ -564,7 +550,7 @@ void ecep_uart_event_task() // GIV ANDET NAVN!
                 // If buffer full happened, you should consider increasing your buffer size
                 // As an example, we directly flush the rx buffer here in order to read more data.
                 uart_flush_input(ECEP_UART_NUM);
-                xQueueReset(ecep_uart_queue);
+                xQueueReset(ecep_uart_rx_queue);
                 break;
 
             // Event of UART RX break detected
@@ -593,9 +579,6 @@ void ecep_uart_event_task() // GIV ANDET NAVN!
 
 void ecep_tx_packet_header_prep(uint8_t *pu8_tx_packet_buf, uint8_t packet_type, uint8_t event_id, uint16_t packet_len)
 {
-    // | Packet Type | Command/event code | Packet Length (low byte) | Packet Length (high byte) |
-    //    (1 byte)         (1 byte)                 (1 byte)                    (1 byte)
-
     pu8_tx_packet_buf[TX_PACKET_TYPE_BYTE]          = (uint8_t)packet_type;
     pu8_tx_packet_buf[TX_PACKET_CMD_EVNT_BYTE]      = (uint8_t)event_id;
     pu8_tx_packet_buf[TX_PACKET_PACK_LEN_LOW_BYTE]  = (uint8_t)packet_len & 0x00FF;
@@ -604,11 +587,6 @@ void ecep_tx_packet_header_prep(uint8_t *pu8_tx_packet_buf, uint8_t packet_type,
 
 void ecep_uart_tx_task()
 {
-
-    // Packet:
-    // |   Header   |   Cmd/Evt param struct   |   Bulk data   |
-    //    (4 bytes)           (differ)              (differ)
-
     sIntern_event_setup_t ecep_event;
     uint16_t              packet_len = 0;
 
@@ -619,24 +597,8 @@ void ecep_uart_tx_task()
     }
     memset(pu8_tx_packet_buf, 0, ECEP_MAX_EVNT_PACKET_LEN);
 
-    // Temporary for testing purposes.
-    // sIntern_event_setup_t ecep_init_event;
-    // ecep_init_event.u8_id = ECEP_EVNT_LEFT_ADC_RAW;
-    // ecep_init_event.param.FFT_stgs.fft_output_format = ampltitude_dB_SPL;
-    // ecep_init_event.param.FFT_stgs.fft_window = blackman_nuttall;
-    // ecep_init_event.param.FFT_stgs.fft_corr_factor = amplitude;
-    // ecep_init_event.param.FFT_stgs.u32_fft_res_avg_count = 100001;
-
-    // xQueueSend(gs_xQueue_ecep_events, &ecep_init_event, 0);
-    // xQueueSend(gs_xQueue_ecep_events, &ecep_init_event, 0);
-
-    // send_ecep_evnt_cmd_status(ECEP_FAIL, ECEP_CMD_FETCH_PR_DEF_STATE);
-    // send_ecep_evnt_pr_def_state(norm_open);
-    // vTaskDelay(5000 / portTICK_PERIOD_MS);
-
     while (1)
     {
-
         if (xQueueReceive(gs_xQueue_ecep_events, &ecep_event, (TickType_t)portMAX_DELAY) == pdTRUE)
         {
             packet_len = ECEP_HEADER_LEN;
@@ -808,6 +770,14 @@ void ecep_uart_tx_task()
     }
 }
 
+// Results:
+// Baud    |  Error Ratio
+// -----------------------
+// 115200  |  1.000009
+// 230400  |  1.000100
+// 460929  |  1.000280
+// 576057  |  1.000099
+// 922190  |  1.000640
 static void baud_error_test(int32_t i32_uart_num, int32_t i32_baud)
 {
     uint32_t u32_actual_baud;
@@ -857,22 +827,17 @@ void ecep_uart_init(QueueHandle_t     xQueue_pr_ecep_cmds,
         .stop_bits           = UART_STOP_BITS_1,
         .flow_ctrl           = ECEP_UART_CFG_FC,
         .rx_flow_ctrl_thresh = 122,
-        .source_clk          = UART_SCLK_DEFAULT, // Default source clk is from APB (is fastest -> least baud to reg rounding error) // TEST LIGE
+        .source_clk          = UART_SCLK_DEFAULT, // Default source clk is from APB (is fastest -> least baud to reg rounding error)
     };
     // Set ECEP UART config:
     ESP_ERROR_CHECK(uart_param_config(ECEP_UART_NUM, &ecep_uart_config));
     // Set ECEP UART pins:
     ESP_ERROR_CHECK(uart_set_pin(ECEP_UART_NUM, ECEP_TXD_PIN, ECEP_RXD_PIN, ECEP_RTS_PIN, ECEP_CTS_PIN));
     // Install UART driver:
-    ESP_ERROR_CHECK(uart_driver_install(ECEP_UART_NUM, BUF_SIZE * 2, ECEP_MAX_EVNT_PACKET_LEN + 100, 10, &ecep_uart_queue, 0)); // NOTE: tx_buffer_size can be made smaller if
-                                                                                                                                // internal memory is limited. A total tx buffer
-                                                                                                                                // of 100 may cause problems.
-                                                                                                                                // (TX buffer does not have to be above ECEP_MAX_EVNT_PACKET_LEN)
-    // baud_error_test(UART_NUM_1, 115200);
-    // baud_error_test(UART_NUM_1, 230400);
-    // baud_error_test(UART_NUM_1, 460800);
-    // baud_error_test(UART_NUM_1, 576000);
-    // baud_error_test(UART_NUM_1, 921600);
+    ESP_ERROR_CHECK(uart_driver_install(ECEP_UART_NUM, BUF_SIZE * 2, ECEP_MAX_EVNT_PACKET_LEN + 100, 10, &ecep_uart_rx_queue, 0)); /* NOTE: tx_buffer_size can be made smaller if
+                                                                                                                                    internal memory is limited. A total tx buffer
+                                                                                                                                    of around 100 or smaller may cause problems.
+                                                                                                                                    (TX buffer does not have to be above ECEP_MAX_EVNT_PACKET_LEN) */
 
     // Mutex for gs_au8_raw_uart_shr:
     gs_raw_uart_shr_mem_sem = xSemaphoreCreateMutex();

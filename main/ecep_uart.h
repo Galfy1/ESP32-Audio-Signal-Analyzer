@@ -5,10 +5,10 @@
 
 #include "ecep_defines.h"
 
-// ECEP --> External Command Event Protocol
+// See ecep_defines.h for more info
 
 void ecep_rx_packet_handler_task();
-void ecep_uart_event_task();
+void ecep_uart_rx_task();
 void ecep_uart_tx_task();
 
 void ecep_uart_init(QueueHandle_t     xQueue_pr_ecep_cmds,

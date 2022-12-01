@@ -10,32 +10,6 @@ typedef enum
     radix4,
 } eFFT_radix_type_t;
 
-// typedef enum{
-//     ampltitude_mV,      // return result as amplitude in mV
-//     ampltitude_dB_SPL,  // return result as amplitude in dB SPL
-//     power_mV,           // return result as power in mV
-// } eFFT_output_form_t;
-
-// typedef enum {
-//     hann,
-//     blackman,
-//     blackman_harris,
-//     blackman_nuttall,
-//     nuttall,
-//     flat_top,
-// } eFFT_window_type_t;
-
-// typedef enum {
-//     up_to_90dB_SPL,
-//     up_to_120dB_SPL,
-// } eFFT_hw_gain_stage_t;
-
-// typedef enum{
-//     none,
-//     amplitude,
-//     energy,
-// } eFFT_wind_corr_factor_t;
-
 /**
  * @brief Initialize the FFT for acording to "technique 3" (technique 3 refers to using N/2 complex size fft with 1 real input sequency of size N)
  *
