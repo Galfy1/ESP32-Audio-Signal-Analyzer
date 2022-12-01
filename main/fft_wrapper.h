@@ -16,7 +16,7 @@ typedef enum
  * @param eFFT_window_type Desired window type
  * @return esp_err_t
  */
-esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type);
+esp_err_t fft_wrapper_init_tech3(ecep_window_type_t eFFT_window_type);
 
 /**
  * @brief  Run FFT acording to "technuiqe 3" with pre and post processing. (technique 3 refers to using N/2 complex size fft with 1 real input sequency of size N)
@@ -33,7 +33,8 @@ esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type);
  *
  * @return esp_err_t:  returns ESP_OK if sucessfull, else returns error.
  */
-esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_wind_corr_factor_t eFFT_window_corr_factor);
+esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, ecep_output_form_t eFFT_output_form,
+                                    ecep_hw_gain_stage_t eFFT_hw_gain_stage, ecep_wind_corr_factor_t eFFT_window_corr_factor);
 
 /**
  * @brief Used to change the window type. The window type is used duing FFT preprocessing.
@@ -41,8 +42,8 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
  * @param eFFT_window_type Desired window type
  * @return esp_err_t
  */
-esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type);
+esp_err_t fft_wrapper_set_wind(ecep_window_type_t eFFT_window_type);
 
-esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, eFFT_hw_gain_stage_t eFFT_hw_gain_stage);
+esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, ecep_hw_gain_stage_t eFFT_hw_gain_stage);
 
 #endif /*FFTWRAPPER_H_INCLUDED */

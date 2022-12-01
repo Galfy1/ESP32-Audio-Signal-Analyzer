@@ -57,7 +57,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
                 in PSRAM if the size gets too big. Also look into if BUF_SIZE needs to be increased (might not need to))
     */
 
-    sIntern_command_setup_t sIntern_command_setup;
+    ecep_internal_cmd_setup_t sIntern_command_setup;
 
     switch (u8_command_code)
     {
@@ -249,8 +249,8 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id       = u8_command_code;
-        sIntern_command_setup.param.range = *((uint8_t *)pv_params_and_bulk);
+        sIntern_command_setup.u8_id           = u8_command_code;
+        sIntern_command_setup.param.mic_range = *((uint8_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
@@ -336,8 +336,8 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
             esp_restart();
         }
 
-        sIntern_command_setup.u8_id          = u8_command_code;
-        sIntern_command_setup.param.u32_time = *((uint32_t *)pv_params_and_bulk);
+        sIntern_command_setup.u8_id             = u8_command_code;
+        sIntern_command_setup.param.u32_time_ms = *((uint32_t *)pv_params_and_bulk);
 
         if (xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
@@ -439,9 +439,9 @@ void ecep_rx_packet_handler_task()
 
                     if (u32_package_byte_counter == ECEP_HEADER_LEN) // Header has been fully read
                     {
-                        u8_packet_type  = u8_packet_data[TX_PACKET_TYPE_BYTE];
-                        u8_command_code = u8_packet_data[TX_PACKET_CMD_EVNT_BYTE];
-                        u16_packet_len  = u8_packet_data[TX_PACKET_PACK_LEN_LOW_BYTE] | (u8_packet_data[TX_PACKET_PACK_LEN_HIGH_BYTE] << 8);
+                        u8_packet_type  = u8_packet_data[ECEP_HEADER_PACKET_TYPE_BYTE];
+                        u8_command_code = u8_packet_data[ECEP_HEADER_CMD_EVNT_BYTE];
+                        u16_packet_len  = u8_packet_data[ECEP_HEADER_PACK_LEN_LOW_BYTE] | (u8_packet_data[ECEP_HEADER_PACK_LEN_HIGH_BYTE] << 8);
 
                         ESP_LOGI(TAG, "Received Packet - u8_packet_type:  0x%04x", (unsigned int)u8_packet_type);
                         ESP_LOGI(TAG, "Received Packet - u8_command_code: 0x%04x", (unsigned int)u8_command_code);
@@ -579,16 +579,16 @@ void ecep_uart_rx_task()
 
 void ecep_tx_packet_header_prep(uint8_t *pu8_tx_packet_buf, uint8_t packet_type, uint8_t event_id, uint16_t packet_len)
 {
-    pu8_tx_packet_buf[TX_PACKET_TYPE_BYTE]          = (uint8_t)packet_type;
-    pu8_tx_packet_buf[TX_PACKET_CMD_EVNT_BYTE]      = (uint8_t)event_id;
-    pu8_tx_packet_buf[TX_PACKET_PACK_LEN_LOW_BYTE]  = (uint8_t)packet_len & 0x00FF;
-    pu8_tx_packet_buf[TX_PACKET_PACK_LEN_HIGH_BYTE] = (uint8_t)(packet_len >> 8) & 0x00FF;
+    pu8_tx_packet_buf[ECEP_HEADER_PACKET_TYPE_BYTE]   = (uint8_t)packet_type;
+    pu8_tx_packet_buf[ECEP_HEADER_CMD_EVNT_BYTE]      = (uint8_t)event_id;
+    pu8_tx_packet_buf[ECEP_HEADER_PACK_LEN_LOW_BYTE]  = (uint8_t)packet_len & 0x00FF;
+    pu8_tx_packet_buf[ECEP_HEADER_PACK_LEN_HIGH_BYTE] = (uint8_t)(packet_len >> 8) & 0x00FF;
 }
 
 void ecep_uart_tx_task()
 {
-    sIntern_event_setup_t ecep_event;
-    uint16_t              packet_len = 0;
+    ecep_internal_event_setup_t ecep_event;
+    uint16_t                    packet_len = 0;
 
     uint8_t *pu8_tx_packet_buf = heap_caps_malloc(ECEP_MAX_EVNT_PACKET_LEN, MALLOC_CAP_SPIRAM); // TX packet buffer to be transmitted. It size equal the maximum packet size in bytes - 2^16 = 65536
     if ((pu8_tx_packet_buf == NULL))
@@ -612,8 +612,8 @@ void ecep_uart_tx_task()
                 packet_len += sizeof(uint8_t) * 2; // Total of 6 bytes
 
                 ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_COMMAND_STATUS, packet_len);
-                pu8_tx_packet_buf[4] = (uint8_t)ecep_event.param.status_event.u8_parent_cmd_id;
-                pu8_tx_packet_buf[5] = (uint8_t)ecep_event.param.status_event.status;
+                pu8_tx_packet_buf[4] = (uint8_t)ecep_event.param.command_status.u8_parent_cmd_id;
+                pu8_tx_packet_buf[5] = (uint8_t)ecep_event.param.command_status.status;
 
                 break;
 
@@ -665,7 +665,7 @@ void ecep_uart_tx_task()
                 packet_len += sizeof(uint32_t); // Total of 8 bytes
 
                 ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_FFT_TOT_DUR, packet_len);
-                memcpy(&pu8_tx_packet_buf[4], &ecep_event.param.u32_time, sizeof(uint32_t));
+                memcpy(&pu8_tx_packet_buf[4], &ecep_event.param.u32_time_ms, sizeof(uint32_t));
 
                 break;
 
@@ -740,7 +740,7 @@ void ecep_uart_tx_task()
                 packet_len += sizeof(uint8_t); // Total of 5 bytes
 
                 ecep_tx_packet_header_prep(pu8_tx_packet_buf, ECEP_PACKET_TYPE, ECEP_EVNT_MIC_RANGE, packet_len);
-                pu8_tx_packet_buf[4] = (uint8_t)ecep_event.param.range;
+                pu8_tx_packet_buf[4] = (uint8_t)ecep_event.param.mic_range;
 
                 break;
 
@@ -813,7 +813,7 @@ void ecep_uart_init(QueueHandle_t     xQueue_pr_ecep_cmds,
     // Create ECEP event queue:
     /* The programmer is expected to use the "Convenience functions" at the bottom of this file to access the event queue from throughout the application.
         If the programmer instead want to access the event queue directly: create this event queue in main.c instead and pass it to the relevant files. */
-    gs_xQueue_ecep_events = xQueueCreate(10, sizeof(sIntern_event_setup_t));
+    gs_xQueue_ecep_events = xQueueCreate(10, sizeof(ecep_internal_event_setup_t));
     if (gs_xQueue_ecep_events == NULL)
     {
         ESP_LOGE(TAG, "ERROR: while creating gs_xQueue_ecep_events");
@@ -864,13 +864,13 @@ void ecep_uart_init(QueueHandle_t     xQueue_pr_ecep_cmds,
 // ----------------------- Convenience functions for accessing the ecep event queue -----------------------
 
 // Send ECEP_EVNT_COMMAND_STATUS event:
-void send_ecep_evnt_cmd_status(eCMD_status_t status_type, uint8_t u8_cmd_id)
+void send_ecep_evnt_cmd_status(ecep_cmd_status_t status_type, uint8_t u8_cmd_id)
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
 
-    event.u8_id                               = ECEP_EVNT_COMMAND_STATUS;
-    event.param.status_event.u8_parent_cmd_id = u8_cmd_id;
-    event.param.status_event.status           = status_type;
+    event.u8_id                                 = ECEP_EVNT_COMMAND_STATUS;
+    event.param.command_status.u8_parent_cmd_id = u8_cmd_id;
+    event.param.command_status.status           = status_type;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
     {
@@ -879,9 +879,9 @@ void send_ecep_evnt_cmd_status(eCMD_status_t status_type, uint8_t u8_cmd_id)
 }
 
 // Send ECEP_EVNT_PR_DEF_STATE event:
-void send_ecep_evnt_pr_def_state(eRelay_state_t default_relay_state)
+void send_ecep_evnt_pr_def_state(ecep_relay_state_t default_relay_state)
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
 
     event.u8_id            = ECEP_EVNT_PR_DEF_STATE;
     event.param.pr_default = default_relay_state;
@@ -893,10 +893,10 @@ void send_ecep_evnt_pr_def_state(eRelay_state_t default_relay_state)
 }
 
 // Send ECEP_EVNT_FFT_STGS event:
-void send_ecep_evnt_fft_stgs(eFFT_output_form_t fft_output_format, eFFT_window_type_t fft_window,
-                             uint32_t u32_fft_res_avg_count, eFFT_wind_corr_factor_t fft_corr_factor)
+void send_ecep_evnt_fft_stgs(ecep_output_form_t fft_output_format, ecep_window_type_t fft_window,
+                             uint32_t u32_fft_res_avg_count, ecep_wind_corr_factor_t fft_corr_factor)
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
 
     event.u8_id                                = ECEP_EVNT_FFT_STGS;
     event.param.FFT_stgs.fft_output_format     = fft_output_format;
@@ -913,10 +913,10 @@ void send_ecep_evnt_fft_stgs(eFFT_output_form_t fft_output_format, eFFT_window_t
 // Send ECEP_EVNT_FFT_TOT_DUR event:
 void send_ecep_evnt_fft_tot_dur(uint32_t u32_fft_total_dur_ms)
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
 
-    event.u8_id          = ECEP_EVNT_FFT_TOT_DUR;
-    event.param.u32_time = u32_fft_total_dur_ms;
+    event.u8_id             = ECEP_EVNT_FFT_TOT_DUR;
+    event.param.u32_time_ms = u32_fft_total_dur_ms;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
     {
@@ -927,7 +927,7 @@ void send_ecep_evnt_fft_tot_dur(uint32_t u32_fft_total_dur_ms)
 // Send ECEP_EVNT_LEFT_CEN_FREQ:
 void send_ecep_evnt_L_cen_freq(uint32_t u32_center_freq_hz)
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
 
     event.u8_id                 = ECEP_EVNT_LEFT_CEN_FREQ;
     event.param.u32_cen_freq_hz = u32_center_freq_hz;
@@ -941,7 +941,7 @@ void send_ecep_evnt_L_cen_freq(uint32_t u32_center_freq_hz)
 // Send ECEP_EVNT_RIGHT_CEN_FREQ:
 void send_ecep_evnt_R_cen_freq(uint32_t u32_center_freq_hz)
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
 
     event.u8_id                 = ECEP_EVNT_RIGHT_CEN_FREQ;
     event.param.u32_cen_freq_hz = u32_center_freq_hz;
@@ -955,7 +955,7 @@ void send_ecep_evnt_R_cen_freq(uint32_t u32_center_freq_hz)
 // Send ECEP_EVNT_LEFT_CEN_FREQ_AMP:
 void send_ecep_evnt_L_cen_freq_amp(float f32_center_freq_amp)
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
 
     event.u8_id                  = ECEP_EVNT_LEFT_CEN_FREQ_AMP;
     event.param.f32_cen_freq_amp = f32_center_freq_amp;
@@ -969,7 +969,7 @@ void send_ecep_evnt_L_cen_freq_amp(float f32_center_freq_amp)
 // Send ECEP_EVNT_RIGHT_CEN_FREQ_AMP:
 void send_ecep_evnt_R_cen_freq_amp(float f32_center_freq_amp)
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
 
     event.u8_id                  = ECEP_EVNT_RIGHT_CEN_FREQ_AMP;
     event.param.f32_cen_freq_amp = f32_center_freq_amp;
@@ -981,12 +981,12 @@ void send_ecep_evnt_R_cen_freq_amp(float f32_center_freq_amp)
 }
 
 // Send ECEP_EVNT_MIC_RANGE:
-void send_ecep_evnt_mic_range(eFFT_hw_gain_stage_t hw_gain_stage)
+void send_ecep_evnt_mic_range(ecep_hw_gain_stage_t hw_gain_stage)
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
 
-    event.u8_id       = ECEP_EVNT_MIC_RANGE;
-    event.param.range = hw_gain_stage;
+    event.u8_id           = ECEP_EVNT_MIC_RANGE;
+    event.param.mic_range = hw_gain_stage;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
     {
@@ -997,7 +997,7 @@ void send_ecep_evnt_mic_range(eFFT_hw_gain_stage_t hw_gain_stage)
 // Send ECEP_EVNT_LEFT_FFT_RES:
 void send_ecep_evnt_L_fft_res()
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_LEFT_FFT_RES;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -1009,7 +1009,7 @@ void send_ecep_evnt_L_fft_res()
 // Send ECEP_EVNT_RIGHT_FFT_RES:
 void send_ecep_evnt_R_fft_res()
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_RIGHT_FFT_RES;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -1021,7 +1021,7 @@ void send_ecep_evnt_R_fft_res()
 // Send ECEP_EVNT_LEFT_ADC_RAW:
 void send_ecep_evnt_L_adc_raw()
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_LEFT_ADC_RAW;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -1033,7 +1033,7 @@ void send_ecep_evnt_L_adc_raw()
 // Send ECEP_EVNT_RIGHT_ADC_RAW
 void send_ecep_evnt_R_adc_raw()
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_RIGHT_ADC_RAW;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
@@ -1045,7 +1045,7 @@ void send_ecep_evnt_R_adc_raw()
 // Send ECEP_EVNT_PONG:
 void send_ecep_evnt_pong()
 {
-    sIntern_event_setup_t event;
+    ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_PONG;
 
     if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)

@@ -57,7 +57,7 @@ static bool gs_init_called = false;
 // Window coefficients:
 __attribute__((aligned(16))) static float gs_af32_wind[DATA_BLOCK_SIZE];
 
-static eFFT_window_type_t gs_curr_selected_wind;
+static ecep_window_type_t gs_curr_selected_wind;
 
 // NESP SKRIV KORT OM I RAPPORTEN HVORFOR VI BRUGER WINDOWS
 // DE nævner det her:
@@ -144,7 +144,7 @@ static esp_err_t calc_wind_correction_factors()
     return ESP_OK;
 }
 
-static float get_selected_corr_factor(eFFT_wind_corr_factor_t eFFT_window_corr_factor)
+static float get_selected_corr_factor(ecep_wind_corr_factor_t eFFT_window_corr_factor)
 {
     switch (eFFT_window_corr_factor)
     {
@@ -213,7 +213,7 @@ static float get_selected_corr_factor(eFFT_wind_corr_factor_t eFFT_window_corr_f
     return ESP_FAIL;
 }
 
-esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, ecep_hw_gain_stage_t eFFT_hw_gain_stage)
 {
     float f32_p0_mv;
 
@@ -257,7 +257,7 @@ esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, eF
  * @param[in] eFFT_window_corr_factor The window correction factor type
  * @return esp_err_t
  */
-static esp_err_t conv_fft_res_to_ampl(float *pf32_data, int32_t i32_bin_size, bool b_result_in_db_spl, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_wind_corr_factor_t eFFT_window_corr_factor)
+static esp_err_t conv_fft_res_to_ampl(float *pf32_data, int32_t i32_bin_size, bool b_result_in_db_spl, ecep_hw_gain_stage_t eFFT_hw_gain_stage, ecep_wind_corr_factor_t eFFT_window_corr_factor)
 {
     // Obtain the selected window-correction-factor for the window in use:
     float f32_selected_wind_corr_factor = get_selected_corr_factor(eFFT_window_corr_factor);
@@ -288,7 +288,7 @@ static esp_err_t conv_fft_res_to_ampl(float *pf32_data, int32_t i32_bin_size, bo
  * @param[in] eFFT_window_corr_factor The window correction factor type
  * @return esp_err_t
  */
-static esp_err_t conv_fft_res_to_pow(float *pf32_data, int32_t i32_bin_size, eFFT_wind_corr_factor_t eFFT_window_corr_factor)
+static esp_err_t conv_fft_res_to_pow(float *pf32_data, int32_t i32_bin_size, ecep_wind_corr_factor_t eFFT_window_corr_factor)
 {
     // Obtain the selected window-correction-factor for the window in use:
     float f32_selected_wind_corr_factor = get_selected_corr_factor(eFFT_window_corr_factor);
@@ -303,7 +303,7 @@ static esp_err_t conv_fft_res_to_pow(float *pf32_data, int32_t i32_bin_size, eFF
     return ESP_OK;
 }
 
-static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
+static esp_err_t generate_window(ecep_window_type_t eFFT_window_type)
 {
     switch (eFFT_window_type)
     {
@@ -339,7 +339,7 @@ static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
     return ESP_OK;
 }
 
-esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
+esp_err_t fft_wrapper_set_wind(ecep_window_type_t eFFT_window_type)
 {
     if (gs_init_called == false)
     {
@@ -353,7 +353,7 @@ esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
     return ESP_OK;
 }
 
-esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_wind_corr_factor_t eFFT_window_corr_factor)
+esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, ecep_output_form_t eFFT_output_form, ecep_hw_gain_stage_t eFFT_hw_gain_stage, ecep_wind_corr_factor_t eFFT_window_corr_factor)
 {
     esp_err_t ret;
 
@@ -450,7 +450,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
     return ESP_OK;
 }
 
-esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type)
+esp_err_t fft_wrapper_init_tech3(ecep_window_type_t eFFT_window_type)
 {
     esp_err_t ret;
 

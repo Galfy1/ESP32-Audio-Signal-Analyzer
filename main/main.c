@@ -70,8 +70,8 @@ void app_main(void)
     }
 
     // Create queues:
-    xQueue_pr_ecep_cmds  = xQueueCreate(10, sizeof(sIntern_command_setup_t)); // Queue for ECEP commands for patient_resp_task
-    xQueue_dsp_ecep_cmds = xQueueCreate(10, sizeof(sIntern_command_setup_t)); // Queue for ECEP commands for dsp_ecep_handler_task()
+    xQueue_pr_ecep_cmds  = xQueueCreate(10, sizeof(ecep_internal_cmd_setup_t)); // Queue for ECEP commands for patient_resp_task
+    xQueue_dsp_ecep_cmds = xQueueCreate(10, sizeof(ecep_internal_cmd_setup_t)); // Queue for ECEP commands for dsp_ecep_handler_task()
     if ((xQueue_pr_ecep_cmds == NULL) || (xQueue_dsp_ecep_cmds == NULL))
     {
         ESP_LOGE(TAG, "ERROR: while creating one or more queues");

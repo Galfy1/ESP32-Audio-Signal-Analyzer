@@ -103,7 +103,7 @@ static void patient_resp_click()
     }
 }
 
-static void patient_resp_cdl(eRelay_state_t relay_state) // Set default gpio level (cdl)
+static void patient_resp_cdl(ecep_relay_state_t relay_state) // Set default gpio level (cdl)
 {
     if ((gpio_get_level(GPIO_PR_PIN) == gs_u8_default_gpio_level)) // The button is not being pressed atm
     {
@@ -137,8 +137,6 @@ static void patient_resp_fetch_def_state()
 {
     ESP_LOGI(PATIENT_RESP_TAG, "default gpio level: %i", (int)gs_u8_default_gpio_level);
 
-    sIntern_event_setup_t pr_def_state_event;
-
     if (gs_u8_default_gpio_level == GPIO_HIGH)
     {
         send_ecep_evnt_cmd_status(ECEP_SUCCESS, ECEP_CMD_FETCH_PR_DEF_STATE);
@@ -158,7 +156,7 @@ static void patient_resp_fetch_def_state()
 void patient_resp_task()
 {
 
-    sIntern_command_setup_t user_command;
+    ecep_internal_cmd_setup_t user_command;
 
     // Initialize the GPIO 6 config structure.
     gpio_config_t io_conf = {
@@ -191,7 +189,7 @@ void patient_resp_task()
                 break;
 
             case ECEP_CMD_TRIG_PR_PRESS:
-                patient_resp_press(user_command.param.u32_time);
+                patient_resp_press(user_command.param.u32_time_ms);
                 break;
 
             case ECEP_CMD_SET_PR_DEF_STATE:

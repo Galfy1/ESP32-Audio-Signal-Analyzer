@@ -36,11 +36,11 @@
 static const char *DSP_TAG = "DSP.C";
 
 // Declare settings variables with DEFAULT values:
-eFFT_output_form_t      gs_fft_out_format      = DFLT_FFT_OUTPUT_FORMAT; // Output format
-eFFT_window_type_t      gs_window_used         = DFLT_WIND_USED;         // Window type
+ecep_output_form_t      gs_fft_out_format      = DFLT_FFT_OUTPUT_FORMAT; // Output format
+ecep_window_type_t      gs_window_used         = DFLT_WIND_USED;         // Window type
 int32_t                 gs_i32_fft_avg_max_cnt = DFLT_FFT_AVG_MAX_COUNT; // Amount of FFT result blocks to average before passing it on (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
-eFFT_wind_corr_factor_t gs_wind_corr_factor    = DFLT_WIND_CORR_FACTOR;  // Window correction factor type
-eFFT_hw_gain_stage_t    gs_hw_gain_stage       = DFLT_HW_GAIN_STAGE;     // Hardware Gain stage (mic dB range)
+ecep_wind_corr_factor_t gs_wind_corr_factor    = DFLT_WIND_CORR_FACTOR;  // Window correction factor type
+ecep_hw_gain_stage_t    gs_hw_gain_stage       = DFLT_HW_GAIN_STAGE;     // Hardware Gain stage (mic dB range)
 
 uint32_t gs_u32_total_fft_dur_ms; // The total duration of the averaged FFT result in ms
 
@@ -73,7 +73,7 @@ static void calc_fft_duration_ms()
     gs_u32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt * 1000.0; // *1000 to get in ms
 }
 
-static void set_hw_gain_stage_gpios(eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+static void set_hw_gain_stage_gpios(ecep_hw_gain_stage_t eFFT_hw_gain_stage)
 {
     switch (eFFT_hw_gain_stage)
     {
@@ -118,13 +118,13 @@ static void find_cent_freq(float *array, int32_t array_size, uint32_t *p_cent_fr
 
 void dsp_ecep_handler_task()
 {
-    eFFT_output_form_t      output_form_temp;
-    eFFT_window_type_t      wind_type_temp;
-    eFFT_wind_corr_factor_t wind_corr_fact_temp;
-    eFFT_hw_gain_stage_t    hw_gain_stage_temp;
+    ecep_output_form_t      output_form_temp;
+    ecep_window_type_t      wind_type_temp;
+    ecep_wind_corr_factor_t wind_corr_fact_temp;
+    ecep_hw_gain_stage_t    hw_gain_stage_temp;
 
-    sIntern_command_setup_t dsp_ecep_command;
-    uint8_t                 u8_ecep_cmd_id;
+    ecep_internal_cmd_setup_t dsp_ecep_command;
+    uint8_t                   u8_ecep_cmd_id;
 
     while (1)
     {
@@ -301,7 +301,7 @@ void dsp_ecep_handler_task()
             case ECEP_CMD_SET_MIC_RANGE:
                 ESP_LOGI(DSP_TAG, "ECEP_CMD_SET_MIC_RANGE received");
                 // Check for valid param:
-                hw_gain_stage_temp = dsp_ecep_command.param.range;
+                hw_gain_stage_temp = dsp_ecep_command.param.mic_range;
                 if ((hw_gain_stage_temp != up_to_90dB_SPL) && (hw_gain_stage_temp != up_to_120dB_SPL))
                 {
                     send_ecep_evnt_cmd_status(ECEP_ERR_INVALID_PARAM, ECEP_CMD_SET_MIC_RANGE);
