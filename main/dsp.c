@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <string.h> // For memcpy()
+#include <string.h> // For memcpy(), memset()...
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -7,7 +7,7 @@
 #include "freertos/task.h"
 
 #include "driver/gpio.h"
-#include "esp_dsp.h" // FOR TEST
+#include "esp_dsp.h" // For debugging tools like dsps_tone_gen_f32() and dsps_view_spectrum()
 #include "esp_log.h"
 
 #include "common_defines.h"
@@ -16,9 +16,9 @@
 #include "ecep_uart.h" // For convenience functions used to access the ecep event queue
 #include "fft_wrapper.h"
 
-static const char *DSP_TAG = "DSP.C";
+// For Spectral Estimation: Welch's method is used with 0% overlap
 
-#define RADIX_USED radix4 // eFFT_radix_type_t      (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
+#define RADIX_USED radix4 // eFFT_radix_type_t  (Ops: the chosen radix will have to support the DATA_BLOCK_SIZE)
 
 // For hardware gain stage gpio multiplexing:
 #define GPIO_NUM_RANGE_SWITCH_L 5         // Used to multiplex between the two hardware gain stages for left audio channel
@@ -33,12 +33,14 @@ static const char *DSP_TAG = "DSP.C";
 #define DFLT_HW_GAIN_STAGE     up_to_90dB_SPL    // eFFT_hw_gain_stage_t   Default Hardware Gain stage
 #define DFLT_WIND_CORR_FACTOR  amplitude         // eFFT_window_correction_factor_t Default window correction factor type
 
-// Declare settings variables with default values:
-eFFT_output_form_t      gs_fft_out_format      = DFLT_FFT_OUTPUT_FORMAT;
-eFFT_window_type_t      gs_window_used         = DFLT_WIND_USED;
-int32_t                 gs_i32_fft_avg_max_cnt = DFLT_FFT_AVG_MAX_COUNT; // (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
-eFFT_wind_corr_factor_t gs_wind_corr_factor    = DFLT_WIND_CORR_FACTOR;
-eFFT_hw_gain_stage_t    gs_hw_gain_stage       = DFLT_HW_GAIN_STAGE;
+static const char *DSP_TAG = "DSP.C";
+
+// Declare settings variables with DEFAULT values:
+eFFT_output_form_t      gs_fft_out_format      = DFLT_FFT_OUTPUT_FORMAT; // Output format
+eFFT_window_type_t      gs_window_used         = DFLT_WIND_USED;         // Window type
+int32_t                 gs_i32_fft_avg_max_cnt = DFLT_FFT_AVG_MAX_COUNT; // Amount of FFT result blocks to average before passing it on (remember to re-calc gs_f32_total_fft_dur_ms if this variable is changed)
+eFFT_wind_corr_factor_t gs_wind_corr_factor    = DFLT_WIND_CORR_FACTOR;  // Window correction factor type
+eFFT_hw_gain_stage_t    gs_hw_gain_stage       = DFLT_HW_GAIN_STAGE;     // Hardware Gain stage (mic dB range)
 
 uint32_t gs_u32_total_fft_dur_ms; // The total duration of the averaged FFT result in ms
 
@@ -54,27 +56,18 @@ static SemaphoreHandle_t gs_fft_R_res_shr_mem_sem;
 
 static QueueHandle_t gs_xQueue_dsp_ecep_cmds;
 
-// VED IKKE OM DE HER ARRAYS KAN NØJES MED AT VÆRE I DSP TASKSNE I STEDET
-// Arrayes are here 16bit alligned by the compiler in memory to eliminate any unsesessay memory accessesing overhead
-// See: http://www.songho.ca/misc/alignment/dataalign.html for more info
-__attribute__((aligned(16))) static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};
-__attribute__((aligned(16))) static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};
-
 // Stores the latest center frequency indexes and values:
 static uint32_t gs_u32_L_cent_freq_hz;
 static uint32_t gs_u32_R_cent_freq_hz;
 static float    gs_f32_L_cent_freq_val;
 static float    gs_f32_R_cent_freq_val;
 
-// For Spectral Estimation: Welch's method is used with 0% overlap
-
-// IKKE TESTET:
+// NESP IKKE TESTET:
 static void calc_fft_duration_ms()
 {
     gs_u32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt * 1000.0; // *1000 to get in ms
 }
 
-// IKKE TESTET:
 static void set_hw_gain_stage_gpios(eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
 {
     switch (eFFT_hw_gain_stage)
@@ -115,30 +108,8 @@ static void find_cent_freq(float *array, int32_t array_size, uint32_t *p_cent_fr
                                                                                       This is because the half sized FFT result is single sided and goes from 0 - fny. The Bin_nr to Bin_freq expression uses the range to fs (not fny),
                                                                                       so we use the full DATA_BLOCK_SIZE in the expression)
                                                                                   */
-                                                                                                  // (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
-    // ESP_LOGI(DSP_TAG, "WEEE CENTER IDX: %d" , (int)biggest_val_index);
+                                                                                                  // NESP (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
 }
-
-// FOR FFT DEBUGGING TEST:
-// __attribute__((aligned(16)))
-// float x1[DATA_BLOCK_SIZE];
-// static void debugging_fft_test()
-// {
-//     dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 875.0, 0.7, 0);  // De hentyder i doc til at 1 er fny... MEN det argere mere somom at 1 er fs ogs 0.5 er fny...
-//     // for(int i = 0 ; i < 300 ; i++)
-//     // {
-//     //     ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);
-//     // }
-//     // KØR INIT OG FFT HER
-//     //fft_wrapper_init_fast(hann);
-//     fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_mV, gs_hw_gain_stage, gs_wind_corr_factor);
-//     for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
-//     {
-//         ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);
-//     }
-//     // First half of x1 is aplitude values. Second half is junk.
-//     dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2 (it takes takes one complex number (two indexes) to create one aplitude value (one index))
-// }
 
 void dsp_ecep_handler_task()
 {
@@ -354,8 +325,27 @@ void dsp_ecep_handler_task()
     }
 }
 
+// FOR FFT DEBUGGING TEST:
+// __attribute__((aligned(16)))
+// float x1[DATA_BLOCK_SIZE];
+// static void debugging_fft_test()
+// {
+//     dsps_tone_gen_f32(x1, DATA_BLOCK_SIZE, 875.0, 0.7, 0);  // freq of 1 seems to be fs (not fny as stated in the documentation)
+//     fft_wrapper_init_fast(hann);
+//     fft_wrapper_run_fft_tech3(x1, radix2, ampltitude_mV, gs_hw_gain_stage, gs_wind_corr_factor);
+//     for(int i = 0 ; i < DATA_BLOCK_SIZE/2 ; i++)
+//     {
+//         ESP_LOGI(DSP_TAG, "X1 Index %d: %f", i, x1[i]);  // Amplitude output of fft is only of size DATA_BLOCK_SIZE/2
+//     }
+//     dsps_view_spectrum(x1, DATA_BLOCK_SIZE/2, -60, 40);
+// }
+
 void dsp_left_ch_task()
 {
+    // Array is here 16bit alligned by the compiler in memory to eliminate any unsesessay memory accessesing overhead
+    // See: http://www.songho.ca/misc/alignment/dataalign.html for more info
+    __attribute__((aligned(16))) static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};
+
     // A Place to compute the averaged FFT result (located is PSRAM):
     float *pf32_L_fft_res_avg_array = heap_caps_malloc(DATA_BLOCK_SIZE / 2 * sizeof(float), MALLOC_CAP_SPIRAM);
     if (pf32_L_fft_res_avg_array == NULL)
@@ -364,16 +354,13 @@ void dsp_left_ch_task()
     }
     memset(pf32_L_fft_res_avg_array, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
 
-    static int32_t i32_avg_counter = 0;
+    static int32_t i32_avg_counter = 0; // BEHØVER DEN VÆRE STATIC???
+    uint32_t       ret;
 
-    // ---FFT TEST BEGIN---
+    int32_t i32_asa_min_freq_idx = ((float)ASA_SPECIFICATION_MIN_FREQ / ((float)ADC_SAMPLING_FREQ / (float)DATA_BLOCK_SIZE)) - 1; /* Index location of ASA_SPECIFICATION_MIN_FREQ in fft res array
+                                                                                                                                     Bin_freq = Bin_nr * (fs / N) --> Bin_nr = Bin_freq / (fs / N) */
+
     // debugging_fft_test();
-    // ---FFT TEST END---
-
-    uint32_t ret;
-
-    // uint32_t testy_counter = 0;
-    // uint32_t testy_sum = 0;
 
     while (1)
     {
@@ -390,13 +377,6 @@ void dsp_left_ch_task()
             memset(gs_pf32_adc1_shared, 0, sizeof(gs_af32_adc1_temp_buf));                     // Reset the shared memory, just to be sure (gs_af32_adc1_temp_buf is same size as shared space array)
             xSemaphoreGive(gs_adc1_shared_mem_sem);
 
-            ESP_LOGI(DSP_TAG, "ADC1 Read Voltage: %f", gs_af32_adc1_temp_buf[0]);
-
-            // for(int32_t i = 0 ; i <= DATA_BLOCK_SIZE ; i += 1)
-            // {
-            //     ESP_LOGI(DSP_TAG, "WUHUUU %d: %f" , (int)i, gs_af32_adc1_temp_buf[i]);
-            // }
-
             // Run FFT:
             if (gs_fft_out_format == ampltitude_dB_SPL)
             {
@@ -407,34 +387,17 @@ void dsp_left_ch_task()
             {
                 fft_wrapper_run_fft_tech3(gs_af32_adc1_temp_buf, RADIX_USED, gs_fft_out_format, gs_hw_gain_stage, gs_wind_corr_factor);
             }
-            // Remove DC-offset (DC-offset was added by our hardware. aka not a part of the original signal)
-            gs_af32_adc1_temp_buf[0] = 0;
-            gs_af32_adc1_temp_buf[1] = 0;
-            // TÆST OM DET ER NOK BARE AT FJERNE DE FØRSTE 2. ELLER VI ER NØDT TIL AT FJERNE FLERE
 
-            // Test stuff:
+            // Remove everything before ASA_SPECIFICATION_MIN_FREQ since its out of spec:
+            // This will also remove unwanted DC-offset (DC-offset was added by our hardware. aka not a part of the original signal)
+            for (int32_t i = 0; i < i32_asa_min_freq_idx; i++)
+            {
+                gs_af32_adc1_temp_buf[i] = 0;
+            }
+            // gs_af32_adc1_temp_buf[0] = 0;
+            // gs_af32_adc1_temp_buf[1] = 0;
 
-            // testy_counter++;
-            // if(testy_counter == 40)
-            // {
-            //     testy_counter = 0;
-            //     //dsps_view_spectrum(gs_af32_adc1_temp_buf, DATA_BLOCK_SIZE/2, 0, 55); // for debugging
-            //     ESP_LOGI(DSP_TAG, "Center freq idx: %i" , (int) gs_u32_L_cent_freq_hz);
-            //     ESP_LOGI(DSP_TAG, "Center freq val: %f" , gs_f32_L_cent_freq_val);
-
-            //     // for(int i = DATA_BLOCK_SIZE/12 ; i < DATA_BLOCK_SIZE/6 ; i++)
-            //     // {
-            //     //     testy_sum += gs_af32_adc1_temp_buf[i];
-            //     //     //ESP_LOGI(DSP_TAG, "FFT Index %d: %f", i, gs_af32_adc1_temp_buf[i]);
-            //     // }
-            //     //  ESP_LOGI(DSP_TAG, "TESTY SUM: %d", (int)testy_sum);
-            //     //  testy_sum = 0;
-
-            // }
-
-            // Test stuff end
-
-            // Add result into averaging array (remember that only half of gs_af32_adc1_temp_buf is the result. rest is junk):
+            // Add result into averaging array (remember that only half of gs_af32_adc1_temp_buf is amplitude values. rest is junk):
             for (int32_t i = 0; i < DATA_BLOCK_SIZE / 2; i++)
             {
                 pf32_L_fft_res_avg_array[i] += gs_af32_adc1_temp_buf[i];
@@ -471,17 +434,12 @@ void dsp_left_ch_task()
                 memset(pf32_L_fft_res_avg_array, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
             }
         }
-
-        // Print test:
-        //  for(int32_t i = 0 ; i <= sizeof(gs_af32_adc1_temp_buf) ; i += 100)
-        //  {
-        //     ESP_LOGI(DSP_TAG, "WUHUUU: %d" , gs_af32_adc1_temp_buf[i]);
-        //  }
     }
 }
 
 void dsp_right_ch_task()
 {
+    __attribute__((aligned(16))) static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};
 
     while (1)
     {

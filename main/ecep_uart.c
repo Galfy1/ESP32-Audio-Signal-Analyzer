@@ -504,7 +504,7 @@ void ecep_rx_packet_handler_task()
 }
 
 // Note: "uart events" refeers to the esp uart api. Dont confuse this "event" with ECEP events.
-void ecep_uart_event_task()
+void ecep_uart_event_task() // GIV ANDET NAVN!
 {
     uart_event_t event;
 
