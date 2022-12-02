@@ -23,7 +23,7 @@ static const char *PATIENT_RESP_TAG = "patient_response.c";
 
 static uint8_t gs_u8_default_gpio_level = GPIO_LOW;
 
-static QueueHandle_t gs_xQueue_pr_ecep_cmds;
+static QueueHandle_t gs_pr_ecep_cmd_queue;
 
 static void patient_resp_hold()
 {
@@ -172,7 +172,7 @@ void patient_resp_task()
 
     while (1)
     {
-        if (xQueueReceive(gs_xQueue_pr_ecep_cmds, &user_command, 0) == pdTRUE)
+        if (xQueueReceive(gs_pr_ecep_cmd_queue, &user_command, 0) == pdTRUE)
         {
             switch (user_command.u8_id)
             {
@@ -212,7 +212,7 @@ void patient_resp_task()
     }
 }
 
-void patient_resp_init(QueueHandle_t xQueue_pr_ecep_cmds)
+void patient_resp_init(QueueHandle_t pr_ecep_cmd_queue)
 {
-    gs_xQueue_pr_ecep_cmds = xQueue_pr_ecep_cmds;
+    gs_pr_ecep_cmd_queue = pr_ecep_cmd_queue;
 }

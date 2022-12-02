@@ -35,8 +35,8 @@ void app_main(void)
 {
     TaskHandle_t  dsp_left_task_handle;
     TaskHandle_t  dsp_right_task_handle;
-    QueueHandle_t xQueue_pr_ecep_cmds;
-    QueueHandle_t xQueue_dsp_ecep_cmds;
+    QueueHandle_t pr_ecep_cmd_queue;
+    QueueHandle_t dsp_ecep_cmd_queue;
 
     ESP_LOGI(TAG, "Audio Signal Analyzer Application Starting...");
 
@@ -70,9 +70,9 @@ void app_main(void)
     }
 
     // Create queues:
-    xQueue_pr_ecep_cmds  = xQueueCreate(10, sizeof(ecep_internal_cmd_setup_t)); // Queue for ECEP commands for patient_resp_task
-    xQueue_dsp_ecep_cmds = xQueueCreate(10, sizeof(ecep_internal_cmd_setup_t)); // Queue for ECEP commands for dsp_ecep_handler_task()
-    if ((xQueue_pr_ecep_cmds == NULL) || (xQueue_dsp_ecep_cmds == NULL))
+    pr_ecep_cmd_queue  = xQueueCreate(10, sizeof(ecep_internal_cmd_setup_t)); // Queue for ECEP commands for patient_resp_task
+    dsp_ecep_cmd_queue = xQueueCreate(10, sizeof(ecep_internal_cmd_setup_t)); // Queue for ECEP commands for dsp_ecep_handler_task()
+    if ((pr_ecep_cmd_queue == NULL) || (dsp_ecep_cmd_queue == NULL))
     {
         ESP_LOGE(TAG, "ERROR: while creating one or more queues");
     }
@@ -93,13 +93,13 @@ void app_main(void)
         pf32_R_fft_res_shr,
         fft_L_res_shr_mem_sem,
         fft_R_res_shr_mem_sem,
-        xQueue_dsp_ecep_cmds);
+        dsp_ecep_cmd_queue);
 
-    patient_resp_init(xQueue_pr_ecep_cmds);
+    patient_resp_init(pr_ecep_cmd_queue);
 
     ecep_uart_init(
-        xQueue_pr_ecep_cmds,
-        xQueue_dsp_ecep_cmds,
+        pr_ecep_cmd_queue,
+        dsp_ecep_cmd_queue,
         pf32_adc1_shared,
         pf32_adc2_shared,
         adc1_shared_mem_sem,

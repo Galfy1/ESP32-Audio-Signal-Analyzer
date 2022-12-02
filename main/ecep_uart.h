@@ -11,8 +11,8 @@ void ecep_rx_packet_handler_task();
 void ecep_uart_rx_task();
 void ecep_uart_tx_task();
 
-void ecep_uart_init(QueueHandle_t     xQueue_pr_ecep_cmds,
-                    QueueHandle_t     xQueue_dsp_ecep_cmds,
+void ecep_uart_init(QueueHandle_t     pr_ecep_cmd_queue,
+                    QueueHandle_t     dsp_ecep_cmd_queue,
                     float            *pf32_adc1_shared,
                     float            *pf32_adc2_shared,
                     SemaphoreHandle_t adc1_shared_mem_sem,

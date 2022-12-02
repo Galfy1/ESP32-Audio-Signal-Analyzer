@@ -28,14 +28,14 @@ static const char *TAG = "ecep_uart.c";
 #define BUF_SIZE         1024
 #define UART_RD_BUF_SIZE BUF_SIZE
 
-static QueueHandle_t ecep_uart_rx_queue; // Queue for uart api
-static QueueHandle_t ecep_data_len_que;  // Queue used to syncronize ecep_rx_packet_handler_task() from ecep_uart_rx_task()
+static QueueHandle_t gs_uart_rx_queue;  // Queue for uart api
+static QueueHandle_t gs_data_len_queue; // Queue used to syncronize ecep_rx_packet_handler_task() from ecep_uart_rx_task()
 
-static QueueHandle_t gs_xQueue_ecep_events;   // Queue for ECEP events
-static QueueHandle_t gs_xQueue_pr_ecep_cmds;  // Queue for Patient Response ECEP commands
-static QueueHandle_t gs_xQueue_dsp_ecep_cmds; // Queue for DSP ECEP commands
+static QueueHandle_t gs_ecep_event_queue;   // Queue for ECEP events
+static QueueHandle_t gs_pr_ecep_cmd_queue;  // Queue for Patient Response ECEP commands
+static QueueHandle_t gs_dsp_ecep_cmd_queue; // Queue for DSP ECEP commands
 
-static uint8_t           gs_au8_raw_uart_shr[UART_RD_BUF_SIZE]; // Raw uart read data (shared memory)
+static uint8_t           gs_au8_raw_data_shr[UART_RD_BUF_SIZE]; // Raw uart rx data (shared memory)
 static SemaphoreHandle_t gs_raw_uart_shr_mem_sem;
 
 static float            *gs_pf32_adc1_shared;
@@ -73,7 +73,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id         = u8_command_code;
         sIntern_command_setup.param.channel = *((uint8_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -91,7 +91,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id                   = u8_command_code;
         sIntern_command_setup.param.fft_output_format = *((uint8_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -109,7 +109,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id            = u8_command_code;
         sIntern_command_setup.param.fft_window = *((uint8_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -127,7 +127,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id                       = u8_command_code;
         sIntern_command_setup.param.u32_fft_res_avg_count = *((uint32_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -145,7 +145,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id                     = u8_command_code;
         sIntern_command_setup.param.fft_win_corr_factor = *((uint8_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -162,7 +162,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
 
         sIntern_command_setup.u8_id = u8_command_code;
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -180,7 +180,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
 
         sIntern_command_setup.u8_id = u8_command_code;
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -198,7 +198,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id         = u8_command_code;
         sIntern_command_setup.param.channel = *((uint8_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -216,7 +216,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id         = u8_command_code;
         sIntern_command_setup.param.channel = *((uint8_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -234,7 +234,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id         = u8_command_code;
         sIntern_command_setup.param.channel = *((uint8_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -252,7 +252,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id           = u8_command_code;
         sIntern_command_setup.param.mic_range = *((uint8_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -270,7 +270,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
 
         sIntern_command_setup.u8_id = u8_command_code;
 
-        if (xQueueSend(gs_xQueue_dsp_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_dsp_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). DSP command queue is full");
         }
@@ -287,7 +287,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
 
         sIntern_command_setup.u8_id = u8_command_code;
 
-        if (xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_pr_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full");
         }
@@ -304,7 +304,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
 
         sIntern_command_setup.u8_id = u8_command_code;
 
-        if (xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_pr_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full");
         }
@@ -321,7 +321,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
 
         sIntern_command_setup.u8_id = u8_command_code;
 
-        if (xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_pr_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full");
         }
@@ -339,7 +339,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id             = u8_command_code;
         sIntern_command_setup.param.u32_time_ms = *((uint32_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_pr_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full");
         }
@@ -357,7 +357,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
         sIntern_command_setup.u8_id             = u8_command_code;
         sIntern_command_setup.param.relay_state = *((uint8_t *)pv_params_and_bulk);
 
-        if (xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_pr_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full");
         }
@@ -374,7 +374,7 @@ static void ecep_command_handler(uint8_t u8_command_code, uint8_t *pv_params_and
 
         sIntern_command_setup.u8_id = u8_command_code;
 
-        if (xQueueSend(gs_xQueue_pr_ecep_cmds, &sIntern_command_setup, 0) == errQUEUE_FULL)
+        if (xQueueSend(gs_pr_ecep_cmd_queue, &sIntern_command_setup, 0) == errQUEUE_FULL)
         {
             ESP_LOGE(TAG, "ERROR: in ecep_command_handler(). PR command queue is full");
         }
@@ -413,12 +413,12 @@ void ecep_rx_packet_handler_task()
 
     while (1)
     {
-        if (xQueueReceive(ecep_data_len_que, (void *)&u32_data_len, portMAX_DELAY))
+        if (xQueueReceive(gs_data_len_queue, (void *)&u32_data_len, portMAX_DELAY))
         {
             // Take a copy of the shared memory:
             if (xSemaphoreTake(gs_raw_uart_shr_mem_sem, portMAX_DELAY) == pdTRUE)
             {
-                memcpy(au8_raw_uart_copy, gs_au8_raw_uart_shr, sizeof(au8_raw_uart_copy));
+                memcpy(au8_raw_uart_copy, gs_au8_raw_data_shr, sizeof(au8_raw_uart_copy));
                 xSemaphoreGive(gs_raw_uart_shr_mem_sem);
             }
 
@@ -497,7 +497,7 @@ void ecep_uart_rx_task()
     while (1)
     {
         //  Waiting for UART event.
-        if (xQueueReceive(ecep_uart_rx_queue, (void *)&event, (TickType_t)portMAX_DELAY))
+        if (xQueueReceive(gs_uart_rx_queue, (void *)&event, (TickType_t)portMAX_DELAY))
         {
             switch (event.type)
             {
@@ -511,26 +511,26 @@ void ecep_uart_rx_task()
                 ESP_LOGI(TAG, "[UART DATA]: %d", event.size);
 
                 // Error check:
-                if (uxQueueMessagesWaiting(ecep_data_len_que))
+                if (uxQueueMessagesWaiting(gs_data_len_queue))
                 {
-                    // ecep_rx_packet_handler_task() have missed the data stored in gs_au8_raw_uart_shr (it was too slow to handle the previous uart data)
+                    // ecep_rx_packet_handler_task() have missed the data stored in gs_au8_raw_data_shr (it was too slow to handle the previous uart data)
                     // Packets are now unsyncronized. Trying to fix by restarting.
-                    ESP_LOGE(TAG, "ERROR: ecep_rx_packet_handler_task() missed the uart data stored in gs_au8_raw_uart_shr... Restarting");
+                    ESP_LOGE(TAG, "ERROR: ecep_rx_packet_handler_task() missed the uart data stored in gs_au8_raw_data_shr... Restarting");
                     esp_restart();
                 }
 
                 // Read uart data:
                 if (xSemaphoreTake(gs_raw_uart_shr_mem_sem, portMAX_DELAY) == pdTRUE)
                 {
-                    memset(gs_au8_raw_uart_shr, 0, sizeof(gs_au8_raw_uart_shr)); // Reset shared memory (just to be sure)
-                    uart_read_bytes(ECEP_UART_NUM, gs_au8_raw_uart_shr, event.size, portMAX_DELAY);
+                    memset(gs_au8_raw_data_shr, 0, sizeof(gs_au8_raw_data_shr)); // Reset shared memory (just to be sure)
+                    uart_read_bytes(ECEP_UART_NUM, gs_au8_raw_data_shr, event.size, portMAX_DELAY);
                     xSemaphoreGive(gs_raw_uart_shr_mem_sem);
                 }
 
                 // Trigger ecep_rx_packet_handler_task():
-                if (xQueueSend(ecep_data_len_que, (void *)&event.size, (TickType_t)10) != pdPASS)
+                if (xQueueSend(gs_data_len_queue, (void *)&event.size, (TickType_t)10) != pdPASS)
                 {
-                    ESP_LOGE(TAG, "ERROR: while sending to ecep_data_len_que queue");
+                    ESP_LOGE(TAG, "ERROR: while sending to gs_data_len_queue queue");
                 }
                 break;
 
@@ -541,7 +541,7 @@ void ecep_uart_rx_task()
                 // The ISR has already reset the rx FIFO,
                 // As an example, we directly flush the rx buffer here in order to read more data.
                 uart_flush_input(ECEP_UART_NUM);
-                xQueueReset(ecep_uart_rx_queue);
+                xQueueReset(gs_uart_rx_queue);
                 break;
 
             // Event of UART ring buffer full
@@ -550,7 +550,7 @@ void ecep_uart_rx_task()
                 // If buffer full happened, you should consider increasing your buffer size
                 // As an example, we directly flush the rx buffer here in order to read more data.
                 uart_flush_input(ECEP_UART_NUM);
-                xQueueReset(ecep_uart_rx_queue);
+                xQueueReset(gs_uart_rx_queue);
                 break;
 
             // Event of UART RX break detected
@@ -599,7 +599,7 @@ void ecep_uart_tx_task()
 
     while (1)
     {
-        if (xQueueReceive(gs_xQueue_ecep_events, &ecep_event, (TickType_t)portMAX_DELAY) == pdTRUE)
+        if (xQueueReceive(gs_ecep_event_queue, &ecep_event, (TickType_t)portMAX_DELAY) == pdTRUE)
         {
             packet_len = ECEP_HEADER_LEN;
 
@@ -796,8 +796,8 @@ static void baud_error_test(int32_t i32_uart_num, int32_t i32_baud)
     ESP_LOGI(TAG, "BAUD TEST. Set baud: %d  Actual baud: %d  Error ratio: %f", (int)i32_baud, (int)u32_actual_baud, (float)u32_actual_baud / (float)i32_baud);
 }
 
-void ecep_uart_init(QueueHandle_t     xQueue_pr_ecep_cmds,
-                    QueueHandle_t     xQueue_dsp_ecep_cmds,
+void ecep_uart_init(QueueHandle_t     pr_ecep_cmd_queue,
+                    QueueHandle_t     dsp_ecep_cmd_queue,
                     float            *pf32_adc1_shared,
                     float            *pf32_adc2_shared,
                     SemaphoreHandle_t adc1_shared_mem_sem,
@@ -807,16 +807,16 @@ void ecep_uart_init(QueueHandle_t     xQueue_pr_ecep_cmds,
                     SemaphoreHandle_t fft_L_res_shr_mem_sem,
                     SemaphoreHandle_t fft_R_res_shr_mem_sem)
 {
-    gs_xQueue_pr_ecep_cmds  = xQueue_pr_ecep_cmds;
-    gs_xQueue_dsp_ecep_cmds = xQueue_dsp_ecep_cmds;
+    gs_pr_ecep_cmd_queue  = pr_ecep_cmd_queue;
+    gs_dsp_ecep_cmd_queue = dsp_ecep_cmd_queue;
 
     // Create ECEP event queue:
     /* The programmer is expected to use the "Convenience functions" at the bottom of this file to access the event queue from throughout the application.
         If the programmer instead want to access the event queue directly: create this event queue in main.c instead and pass it to the relevant files. */
-    gs_xQueue_ecep_events = xQueueCreate(10, sizeof(ecep_internal_event_setup_t));
-    if (gs_xQueue_ecep_events == NULL)
+    gs_ecep_event_queue = xQueueCreate(10, sizeof(ecep_internal_event_setup_t));
+    if (gs_ecep_event_queue == NULL)
     {
-        ESP_LOGE(TAG, "ERROR: while creating gs_xQueue_ecep_events");
+        ESP_LOGE(TAG, "ERROR: while creating gs_ecep_event_queue");
     }
 
     // ECEP UART config:
@@ -834,19 +834,19 @@ void ecep_uart_init(QueueHandle_t     xQueue_pr_ecep_cmds,
     // Set ECEP UART pins:
     ESP_ERROR_CHECK(uart_set_pin(ECEP_UART_NUM, ECEP_TXD_PIN, ECEP_RXD_PIN, ECEP_RTS_PIN, ECEP_CTS_PIN));
     // Install UART driver:
-    ESP_ERROR_CHECK(uart_driver_install(ECEP_UART_NUM, BUF_SIZE * 2, ECEP_MAX_EVNT_PACKET_LEN + 100, 10, &ecep_uart_rx_queue, 0)); /* NOTE: tx_buffer_size can be made smaller if
+    ESP_ERROR_CHECK(uart_driver_install(ECEP_UART_NUM, BUF_SIZE * 2, ECEP_MAX_EVNT_PACKET_LEN + 100, 10, &gs_uart_rx_queue, 0)); /* NOTE: tx_buffer_size can be made smaller if
                                                                                                                                     internal memory is limited. A total tx buffer
                                                                                                                                     of around 100 or smaller may cause problems.
                                                                                                                                     (TX buffer does not have to be above ECEP_MAX_EVNT_PACKET_LEN) */
 
-    // Mutex for gs_au8_raw_uart_shr:
+    // Mutex for gs_au8_raw_data_shr:
     gs_raw_uart_shr_mem_sem = xSemaphoreCreateMutex();
 
     // Packet handler:
-    ecep_data_len_que = xQueueCreate(10, sizeof(uint32_t)); // (event.size from uart event is uint32_t)
-    if (ecep_data_len_que == NULL)
+    gs_data_len_queue = xQueueCreate(10, sizeof(uint32_t)); // (event.size from uart event is uint32_t)
+    if (gs_data_len_queue == NULL)
     {
-        ESP_LOGE(TAG, "ERROR: while creating ecep_data_len_que queue");
+        ESP_LOGE(TAG, "ERROR: while creating gs_data_len_queue queue");
     }
 
     // TX Packet handler
@@ -872,7 +872,7 @@ void send_ecep_evnt_cmd_status(ecep_cmd_status_t status_type, uint8_t u8_cmd_id)
     event.param.command_status.u8_parent_cmd_id = u8_cmd_id;
     event.param.command_status.status           = status_type;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_status_event(). Event queue is full");
     }
@@ -886,7 +886,7 @@ void send_ecep_evnt_pr_def_state(ecep_relay_state_t default_relay_state)
     event.u8_id            = ECEP_EVNT_PR_DEF_STATE;
     event.param.pr_default = default_relay_state;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_pr_def_state(). Event queue is full");
     }
@@ -904,7 +904,7 @@ void send_ecep_evnt_fft_stgs(ecep_output_form_t fft_output_format, ecep_window_t
     event.param.FFT_stgs.u32_fft_res_avg_count = u32_fft_res_avg_count;
     event.param.FFT_stgs.fft_corr_factor       = fft_corr_factor;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_fft_stgs(). Event queue is full");
     }
@@ -918,7 +918,7 @@ void send_ecep_evnt_fft_tot_dur(uint32_t u32_fft_total_dur_ms)
     event.u8_id             = ECEP_EVNT_FFT_TOT_DUR;
     event.param.u32_time_ms = u32_fft_total_dur_ms;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_fft_tot_dur(). Event queue is full");
     }
@@ -932,7 +932,7 @@ void send_ecep_evnt_L_cen_freq(uint32_t u32_center_freq_hz)
     event.u8_id                 = ECEP_EVNT_LEFT_CEN_FREQ;
     event.param.u32_cen_freq_hz = u32_center_freq_hz;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_L_cen_freq(). Event queue is full");
     }
@@ -946,7 +946,7 @@ void send_ecep_evnt_R_cen_freq(uint32_t u32_center_freq_hz)
     event.u8_id                 = ECEP_EVNT_RIGHT_CEN_FREQ;
     event.param.u32_cen_freq_hz = u32_center_freq_hz;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_R_cen_freq(). Event queue is full");
     }
@@ -960,7 +960,7 @@ void send_ecep_evnt_L_cen_freq_amp(float f32_center_freq_amp)
     event.u8_id                  = ECEP_EVNT_LEFT_CEN_FREQ_AMP;
     event.param.f32_cen_freq_amp = f32_center_freq_amp;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_L_cen_freq_amp(). Event queue is full");
     }
@@ -974,7 +974,7 @@ void send_ecep_evnt_R_cen_freq_amp(float f32_center_freq_amp)
     event.u8_id                  = ECEP_EVNT_RIGHT_CEN_FREQ_AMP;
     event.param.f32_cen_freq_amp = f32_center_freq_amp;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_R_cen_freq_amp(). Event queue is full");
     }
@@ -988,7 +988,7 @@ void send_ecep_evnt_mic_range(ecep_hw_gain_stage_t hw_gain_stage)
     event.u8_id           = ECEP_EVNT_MIC_RANGE;
     event.param.mic_range = hw_gain_stage;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_mic_range(). Event queue is full");
     }
@@ -1000,7 +1000,7 @@ void send_ecep_evnt_L_fft_res()
     ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_LEFT_FFT_RES;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_L_fft_res(). Event queue is full");
     }
@@ -1012,7 +1012,7 @@ void send_ecep_evnt_R_fft_res()
     ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_RIGHT_FFT_RES;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_R_fft_res(). Event queue is full");
     }
@@ -1024,7 +1024,7 @@ void send_ecep_evnt_L_adc_raw()
     ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_LEFT_ADC_RAW;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_L_adc_raw(). Event queue is full");
     }
@@ -1036,7 +1036,7 @@ void send_ecep_evnt_R_adc_raw()
     ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_RIGHT_ADC_RAW;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_R_adc_raw(). Event queue is full");
     }
@@ -1048,7 +1048,7 @@ void send_ecep_evnt_pong()
     ecep_internal_event_setup_t event;
     event.u8_id = ECEP_EVNT_PONG;
 
-    if (xQueueSend(gs_xQueue_ecep_events, &event, 0) == errQUEUE_FULL)
+    if (xQueueSend(gs_ecep_event_queue, &event, 0) == errQUEUE_FULL)
     {
         ESP_LOGE(TAG, "ERROR: in send_ecep_evnt_pong(). Event queue is full");
     }

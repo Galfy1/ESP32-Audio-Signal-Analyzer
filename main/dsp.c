@@ -54,7 +54,7 @@ static float            *gs_pf32_R_fft_res_shr;
 static SemaphoreHandle_t gs_fft_L_res_shr_mem_sem;
 static SemaphoreHandle_t gs_fft_R_res_shr_mem_sem;
 
-static QueueHandle_t gs_xQueue_dsp_ecep_cmds;
+static QueueHandle_t gs_dsp_ecep_cmd_queue;
 
 // Stores the latest center frequency indexes and values:
 static uint32_t gs_u32_L_cent_freq_hz;
@@ -129,7 +129,7 @@ void dsp_ecep_handler_task()
     while (1)
     {
 
-        if (xQueueReceive(gs_xQueue_dsp_ecep_cmds, (void *)&dsp_ecep_command, portMAX_DELAY))
+        if (xQueueReceive(gs_dsp_ecep_cmd_queue, (void *)&dsp_ecep_command, portMAX_DELAY))
         {
             u8_ecep_cmd_id = dsp_ecep_command.u8_id;
 
@@ -323,7 +323,7 @@ void dsp_ecep_handler_task()
                 break;
 
             default:
-                ESP_LOGE(DSP_TAG, "ERROR: in dsp_ecep_handler_task(). A command not relevant to dsp was located in gs_xQueue_dsp_ecep_cmds");
+                ESP_LOGE(DSP_TAG, "ERROR: in dsp_ecep_handler_task(). A command not relevant to dsp was located in gs_dsp_ecep_cmd_queue");
                 break;
             }
         }
@@ -462,7 +462,7 @@ void dsp_init(float            *pf32_adc1_shared,
               float            *pf32_R_fft_res_shr,
               SemaphoreHandle_t fft_L_res_shr_mem_sem,
               SemaphoreHandle_t fft_R_res_shr_mem_sem,
-              QueueHandle_t     xQueue_dsp_ecep_cmds)
+              QueueHandle_t     dsp_ecep_cmd_queue)
 {
     gs_pf32_adc1_shared    = pf32_adc1_shared;
     gs_pf32_adc2_shared    = pf32_adc2_shared;
@@ -474,7 +474,7 @@ void dsp_init(float            *pf32_adc1_shared,
     gs_fft_L_res_shr_mem_sem = fft_L_res_shr_mem_sem;
     gs_fft_R_res_shr_mem_sem = fft_R_res_shr_mem_sem;
 
-    gs_xQueue_dsp_ecep_cmds = xQueue_dsp_ecep_cmds;
+    gs_dsp_ecep_cmd_queue = dsp_ecep_cmd_queue;
 
     // GPIO setup for hardware gain stage multiplexing:
     gpio_config_t io_conf = {
