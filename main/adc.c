@@ -42,7 +42,7 @@ static TaskHandle_t gs_dsp_left_task_handle;
 static TaskHandle_t gs_dsp_right_task_handle;
 
 // (ISR is placed in IRAM for low latency)
-static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t handle, const adc_continuous_evt_data_t *edata, void *user_data)
+static bool IRAM_ATTR conv_done_cb(adc_continuous_handle_t handle, const adc_continuous_evt_data_t *edata, void *user_data)
 {
     BaseType_t mustYield = pdFALSE;
 
@@ -115,7 +115,7 @@ void adc_task()
 
     // Set callback function:
     adc_continuous_evt_cbs_t cbs = {
-        .on_conv_done = s_conv_done_cb,
+        .on_conv_done = conv_done_cb,
     };
     ESP_ERROR_CHECK(adc_continuous_register_event_callbacks(adc_handle, &cbs, NULL));
     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));

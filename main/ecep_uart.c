@@ -577,7 +577,7 @@ void ecep_uart_rx_task()
     }
 }
 
-void ecep_tx_packet_header_prep(uint8_t *pu8_tx_packet_buf, uint8_t packet_type, uint8_t event_id, uint16_t packet_len)
+static void ecep_tx_packet_header_prep(uint8_t *pu8_tx_packet_buf, uint8_t packet_type, uint8_t event_id, uint16_t packet_len)
 {
     pu8_tx_packet_buf[ECEP_HEADER_PACKET_TYPE_BYTE]   = (uint8_t)packet_type;
     pu8_tx_packet_buf[ECEP_HEADER_CMD_EVNT_BYTE]      = (uint8_t)event_id;

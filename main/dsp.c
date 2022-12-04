@@ -405,7 +405,7 @@ static void dsp_loop(float *pf32_adc_temp_buf,
             }
             i32_avg_counter++;
 
-            // If fft averaging is complete:
+            // Enough FFT results has accumulated to start the averaging:
             if (i32_avg_counter >= gs_i32_fft_avg_max_cnt)
             {
                 // Divide array by gs_i32_fft_avg_max_cnt to average:
