@@ -59,7 +59,7 @@ void app_main(void)
     memset(pf32_L_fft_res_shr, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
     memset(pf32_R_fft_res_shr, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
 
-    // Create sempahores:
+    // Create semaphores:
     SemaphoreHandle_t adc1_shared_mem_sem   = xSemaphoreCreateMutex(); // Mutex for gs_af32_adc1_shared
     SemaphoreHandle_t adc2_shared_mem_sem   = xSemaphoreCreateMutex(); // Mutex for gs_af32_adc2_shared
     SemaphoreHandle_t fft_L_res_shr_mem_sem = xSemaphoreCreateMutex(); // Mutex for gs_af32_L_fft_res_shr
@@ -121,7 +121,7 @@ void app_main(void)
     xTaskCreatePinnedToCore(ecep_rx_packet_handler_task, "ecep_rx_packet_handler", 8192, NULL, 4, NULL, 1); // Use CPU1 Core. (A stack size of 4096 is too small (will overflow))
     xTaskCreatePinnedToCore(dsp_ecep_handler_task, "dsp_ecep_handler_task", 4096, NULL, 4, NULL, 0);        // Use CPU0 Core. (A stack size of 2048 is too small (will overflow))
 
-    // Log remaning memory:
+    // Log remaining memory:
     ESP_LOGI(TAG, "Amount of PSRAM remaining: %i", (int)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     ESP_LOGI(TAG, "Amount of internal memory remaining: %i", (int)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
 }
