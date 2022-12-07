@@ -11,6 +11,7 @@
 
 #include "adc.h"
 #include "common_defines.h"
+#include "common_tools.h"
 #include "dsp.h"
 #include "ecep_defines.h"
 #include "ecep_uart.h"
@@ -41,23 +42,10 @@ void app_main(void)
     ESP_LOGI(TAG, "Audio Signal Analyzer Application Starting...");
 
     // Create Shared Memory Located in PSRAM (created as arrays using a special malloc() for PSRAM):
-    float *pf32_adc1_shared = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM); // Shared memory ADC1 (Left mic ch.)
-    float *pf32_adc2_shared = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM); // Shared memory ADC2 (Right mic ch.)
-    if ((pf32_adc1_shared == NULL) || (pf32_adc2_shared == NULL))
-    {
-        ESP_LOGE(TAG, "ERROR: while allocating shared ADC memory in PSRAM");
-    }
-    memset(pf32_adc1_shared, 0, DATA_BLOCK_SIZE * sizeof(float));
-    memset(pf32_adc2_shared, 0, DATA_BLOCK_SIZE * sizeof(float));
-
-    float *pf32_L_fft_res_shr = heap_caps_malloc(DATA_BLOCK_SIZE / 2 * sizeof(float), MALLOC_CAP_SPIRAM); // Shared memory of post proceesed FFT output from DSP task (Left mic ch.)
-    float *pf32_R_fft_res_shr = heap_caps_malloc(DATA_BLOCK_SIZE / 2 * sizeof(float), MALLOC_CAP_SPIRAM); // Shared memory of post proceesed FFT output from DSP task (Right mic ch.)
-    if ((pf32_L_fft_res_shr == NULL) || (pf32_R_fft_res_shr == NULL))
-    {
-        ESP_LOGE(TAG, "ERROR: while allocating shared FFT res memory in PSRAM");
-    }
-    memset(pf32_L_fft_res_shr, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
-    memset(pf32_R_fft_res_shr, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
+    float *pf32_adc1_shared   = malloc_to_psram(DATA_BLOCK_SIZE * sizeof(float));
+    float *pf32_adc2_shared   = malloc_to_psram(DATA_BLOCK_SIZE * sizeof(float));
+    float *pf32_L_fft_res_shr = malloc_to_psram(DATA_BLOCK_SIZE / 2 * sizeof(float));
+    float *pf32_R_fft_res_shr = malloc_to_psram(DATA_BLOCK_SIZE / 2 * sizeof(float));
 
     // Create semaphores:
     SemaphoreHandle_t adc1_shared_mem_sem   = xSemaphoreCreateMutex(); // Mutex for gs_af32_adc1_shared

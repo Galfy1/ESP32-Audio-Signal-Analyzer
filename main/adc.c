@@ -13,6 +13,7 @@
 
 #include "adc.h"
 #include "common_defines.h"
+#include "common_tools.h"
 
 // ADC 1 = Left mic channel
 // ADC 2 = Right mic channel
@@ -218,12 +219,6 @@ void adc_init(float *pu16_adc1_shared, float *pu16_adc2_shared, SemaphoreHandle_
     gs_adc2_shared_mem_sem = adc2_shared_mem_sem;
 
     // Allocate arrays in PSRAM:
-    gs_pf32_adc1_temp_buf = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM);
-    gs_pf32_adc2_temp_buf = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM);
-    if ((gs_pf32_adc1_temp_buf == NULL) || (gs_pf32_adc2_temp_buf == NULL))
-    {
-        ESP_LOGE(ADC_TAG, "ERROR: while allocating ADC temp buf array in PSRAM");
-    }
-    memset(gs_pf32_adc1_temp_buf, 0, DATA_BLOCK_SIZE * sizeof(float));
-    memset(gs_pf32_adc2_temp_buf, 0, DATA_BLOCK_SIZE * sizeof(float));
+    gs_pf32_adc1_temp_buf = malloc_to_psram(DATA_BLOCK_SIZE * sizeof(float));
+    gs_pf32_adc2_temp_buf = malloc_to_psram(DATA_BLOCK_SIZE * sizeof(float));
 }

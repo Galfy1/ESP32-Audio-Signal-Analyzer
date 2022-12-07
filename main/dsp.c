@@ -11,6 +11,7 @@
 #include "esp_log.h"
 
 #include "common_defines.h"
+#include "common_tools.h"
 #include "dsp.h"
 #include "ecep_defines.h"
 #include "ecep_uart.h" // For convenience functions used to access the ecep event queue
@@ -354,12 +355,7 @@ static void dsp_loop(float *pf32_adc_temp_buf,
     uint32_t ret;
 
     // A Place to compute the averaged FFT result (located is PSRAM):
-    float *pf32_fft_res_avg_array = heap_caps_malloc(DATA_BLOCK_SIZE / 2 * sizeof(float), MALLOC_CAP_SPIRAM);
-    if (pf32_fft_res_avg_array == NULL)
-    {
-        ESP_LOGE(DSP_TAG, "ERROR: while allocating FFT res averaging array in PSRAM");
-    }
-    memset(pf32_fft_res_avg_array, 0, DATA_BLOCK_SIZE / 2 * sizeof(float));
+    float *pf32_fft_res_avg_array = malloc_to_psram(DATA_BLOCK_SIZE / 2 * sizeof(float));
 
     int32_t i32_asa_min_freq_idx = ((float)ASA_SPECIFICATION_MIN_FREQ / ((float)ADC_SAMPLING_FREQ / (float)DATA_BLOCK_SIZE)) - 1; /* Index location of ASA_SPECIFICATION_MIN_FREQ in fft res array
                                                                                                                                  Bin_freq = Bin_nr * (fs / N) --> Bin_nr = Bin_freq / (fs / N) */

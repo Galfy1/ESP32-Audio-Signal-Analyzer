@@ -10,6 +10,7 @@
 #include "esp_log.h"
 
 #include "common_defines.h"
+#include "common_tools.h"
 #include "ecep_defines.h"
 #include "ecep_uart.h"
 
@@ -590,12 +591,7 @@ void ecep_uart_tx_task()
     ecep_internal_event_setup_t ecep_event;
     uint16_t                    packet_len = 0;
 
-    uint8_t *pu8_tx_packet_buf = heap_caps_malloc(ECEP_MAX_EVNT_PACKET_LEN, MALLOC_CAP_SPIRAM); // TX packet buffer to be transmitted. It size equal the maximum packet size in bytes - 2^16 = 65536
-    if ((pu8_tx_packet_buf == NULL))
-    {
-        ESP_LOGE(TAG, "ERROR: while allocating memory for TX packet buffer in PSRAM");
-    }
-    memset(pu8_tx_packet_buf, 0, ECEP_MAX_EVNT_PACKET_LEN);
+    uint8_t *pu8_tx_packet_buf = malloc_to_psram(ECEP_MAX_EVNT_PACKET_LEN);
 
     while (1)
     {

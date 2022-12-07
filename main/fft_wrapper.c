@@ -7,6 +7,7 @@
 #include "esp_log.h"
 
 #include "common_defines.h"
+#include "common_tools.h"
 #include "ecep_defines.h"
 #include "fft_wrapper.h"
 
@@ -98,13 +99,8 @@ static float rms_of_float_array(float *p_f32_array, int32_t i32_array_size_in_el
 
 static esp_err_t calc_wind_correction_factors()
 {
-    float *pf32_temp_wind_array = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM); // (Located in PSRAM)
-                                                                                                        // Array does not need to be 16bit aligned since speed is not of essence here
-    if (pf32_temp_wind_array == NULL)
-    {
-        ESP_LOGE(TAG, "ERROR: in calc_wind_correction_factors() while allocating pf32_temp_wind_array memory in PSRAM");
-    }
-    memset(pf32_temp_wind_array, 0, DATA_BLOCK_SIZE * sizeof(float));
+    float *pf32_temp_wind_array = malloc_to_psram(DATA_BLOCK_SIZE * sizeof(float)); // (Located in PSRAM)
+                                                                                    // Array does not need to be 16bit aligned since speed is not of essence here
 
     // No correction:
     gs_correction_factors.f32_no_correction = 1.0;
