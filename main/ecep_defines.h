@@ -6,7 +6,7 @@
 // ECEP: External Command Event Protocol
 
 // ######## ECEP HEADER ########
-// | Packet Type | Command/event code | Packet Length (low byte) | Packet Length (high byte) |
+// | Packet Type | Command/event ID | Packet Length (low byte) | Packet Length (high byte) |
 //    (1 byte)         (1 byte)                 (1 byte)                    (1 byte)
 
 // ######## ECEP PACKAGE ########

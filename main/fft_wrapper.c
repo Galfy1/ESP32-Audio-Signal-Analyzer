@@ -22,11 +22,11 @@ static float gs_max_adc_val_mv;
        1: Use the expression for dB SPL to find the pascal value for a dB SPL value where the equavilent mV output is known
        2: Divide the known mV value with the newly found pascal value to get the ratio
     2: Divide the amplitude values with this ratio to convert from mV to Pascal
-    3: Use the expression for dB SPL to find the dB SPL associated with amplitude value in Pascal (using the standard p0 value)
+    3: Use the expression for dB SPL to find the dB SPL value for each Pascal value (using the standard p0 value)
 
     A more effecient way:
-    Instead of continously converting each amplitude value to pascal and later diving by p0, Let us instead convert p0 to mV once and use that to convert amplitude to dB SPL.
-    (the ratio p/p0 is the same in mV or Pascal as long as both are the same unit, and asuming a proportional relation between mV and Pascal)
+    Instead of continuously converting each amplitude value to pascal and later diving by p0, Let us instead convert p0 to mV once and use that to convert amplitude to dB SPL.
+    (the ratio p/p0 is the same in mV or Pascal as long as both are the same unit, and assuming a proportional relation between mV and Pascal)
     This is done by multiplying p0 with the mV vs. Pascal ratio mentioned before.
     This will result in a a new p0 value for each hardware gain stages
 */
@@ -244,7 +244,6 @@ esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, ec
 /**
  * @brief Convert complex fft result to real amplitude values.
  *        (See page 103 in "Digital Signal Processing: Fundamentals and Applications 3ed." for the math)
- *        SKRIV AT OUTPUT ER mV fra 0 - 1750 HVIS OUPUTTET IKKE ER DB. OG DB SPL HVIS DET ER
  *
  * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
  * @param[in] i32_bin_size amount of complex values in fft result array
