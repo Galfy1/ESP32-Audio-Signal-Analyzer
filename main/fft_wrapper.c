@@ -7,12 +7,13 @@
 #include "esp_log.h"
 
 #include "common_defines.h"
+#include "common_tools.h"
 #include "ecep_defines.h"
 #include "fft_wrapper.h"
 
-static const char *TAG = "fft_wrapper";
-
 #define P0 0.000020 // dB SPL Reference in Pascal
+
+static const char *TAG = "fft_wrapper";
 
 static float gs_max_adc_val_mv;
 
@@ -21,11 +22,11 @@ static float gs_max_adc_val_mv;
        1: Use the expression for dB SPL to find the pascal value for a dB SPL value where the equavilent mV output is known
        2: Divide the known mV value with the newly found pascal value to get the ratio
     2: Divide the amplitude values with this ratio to convert from mV to Pascal
-    3: Use the expression for dB SPL to find the dB SPL associated with amplitude value in Pascal (using the standard p0 value)
+    3: Use the expression for dB SPL to find the dB SPL value for each Pascal value (using the standard p0 value)
 
     A more effecient way:
-    Instead of continously converting each amplitude value to pascal and later diving by p0, Let us instead convert p0 to mV once and use that to convert amplitude to dB SPL.
-    (the ratio p/p0 is the same in mV or Pascal as long as both are the same unit, and asuming a proportional relation between mV and Pascal)
+    Instead of continuously converting each amplitude value to pascal and later diving by p0, Let us instead convert p0 to mV once and use that to convert amplitude to dB SPL.
+    (the ratio p/p0 is the same in mV or Pascal as long as both are the same unit, and assuming a proportional relation between mV and Pascal)
     This is done by multiplying p0 with the mV vs. Pascal ratio mentioned before.
     This will result in a a new p0 value for each hardware gain stages
 */
@@ -52,23 +53,19 @@ typedef struct
 
 static s_correction_factors_t gs_correction_factors;
 
-static int32_t i32_N          = DATA_BLOCK_SIZE; // gs_ FORAN??? måske kand andet end N, da det ikke er bin størrelsen
-static bool    gs_init_called = false;
+static bool gs_init_called = false;
 
 // Window coefficients:
 __attribute__((aligned(16))) static float gs_af32_wind[DATA_BLOCK_SIZE];
 
-static eFFT_window_type_t gs_curr_selected_wind;
+static ecep_window_type_t gs_curr_selected_wind;
 
-// SKRIV KORT OM I RAPPORTEN HVORFOR VI BRUGER WINDOWS
+// NESP SKRIV KORT OM I RAPPORTEN HVORFOR VI BRUGER WINDOWS
 // DE nævner det her:
 // https://www.sjsu.edu/people/burford.furman/docs/me120/FFT_tutorial_NI.pdf
 // MÅSKE FIND AFSNITTET I DSP BOGEN MED DET, OG SE HVAD DE HAR AT SIGE
 // TROR DET STÅR PÅ SIDE 112 I DEN NYE DSP BOG
 // BARE SKRIV SUPER KORT OM DET
-
-// Husk måske også lige at convert "x-aksen" fra bin nr til frekvens (skal måske ikke gøres her men et andet sted idk)
-// (se (4.26) på side 103 i ny dsp bog for denne formel)
 
 static float mean_of_float_array(float *p_f32_array, int32_t i32_array_size_in_elements)
 {
@@ -80,6 +77,7 @@ static float mean_of_float_array(float *p_f32_array, int32_t i32_array_size_in_e
     }
     return (f32_sum / (float)i32_array_size_in_elements);
 }
+
 static float rms_of_float_array(float *p_f32_array, int32_t i32_array_size_in_elements)
 {
     float f32_square = 0.0, f32_mean = 0.0, f32_root = 0.0;
@@ -98,55 +96,51 @@ static float rms_of_float_array(float *p_f32_array, int32_t i32_array_size_in_el
 
     return f32_root;
 }
+
 static esp_err_t calc_wind_correction_factors()
 {
-    float *pf32_temp_wind_array = heap_caps_malloc(DATA_BLOCK_SIZE * sizeof(float), MALLOC_CAP_SPIRAM); // (Located in PSRAM)
-                                                                                                        // Array does not need to be 16bit aligned since speed is not of essence here
-    if (pf32_temp_wind_array == NULL)
-    {
-        ESP_LOGE(TAG, "ERROR: in calc_wind_correction_factors() while allocating pf32_temp_wind_array memory in PSRAM");
-    }
-    memset(pf32_temp_wind_array, 0, DATA_BLOCK_SIZE * sizeof(float));
+    float *pf32_temp_wind_array = malloc_to_psram(DATA_BLOCK_SIZE * sizeof(float)); // (Located in PSRAM)
+                                                                                    // Array does not need to be 16bit aligned since speed is not of essence here
 
     // No correction:
     gs_correction_factors.f32_no_correction = 1.0;
 
     // Hanning:
-    dsps_wind_hann_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_hann_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_hann_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+    dsps_wind_hann_f32(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_hann_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_hann_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
 
     // Blackman:
-    dsps_wind_blackman_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_blackman_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_blackman_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+    dsps_wind_blackman_f32(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_blackman_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_blackman_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
 
     // Blackman_harris:
-    dsps_wind_blackman_harris_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_blackman_harris_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_blackman_harris_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+    dsps_wind_blackman_harris_f32(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_blackman_harris_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_blackman_harris_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
 
     // Blackman_nuttall:
-    dsps_wind_blackman_nuttall_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_blackman_nuttall_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_blackman_nuttall_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+    dsps_wind_blackman_nuttall_f32(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_blackman_nuttall_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_blackman_nuttall_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
 
     // Nuttall:
-    dsps_wind_nuttall_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_nuttall_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_nuttall_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+    dsps_wind_nuttall_f32(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_nuttall_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_nuttall_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
 
     // Flat_top:
-    dsps_wind_flat_top_f32(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_flat_top_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, i32_N);
-    gs_correction_factors.f32_flat_top_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, i32_N);
+    dsps_wind_flat_top_f32(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_flat_top_ampl   = 1.0 / mean_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
+    gs_correction_factors.f32_flat_top_energy = 1.0 / rms_of_float_array(pf32_temp_wind_array, DATA_BLOCK_SIZE);
 
     free(pf32_temp_wind_array); // release the memory for the wind array that is no longer needed.
 
     return ESP_OK;
 }
 
-static float get_selected_corr_factor(eFFT_wind_corr_factor_t eFFT_window_corr_factor)
+static float get_selected_corr_factor(ecep_wind_corr_factor_t eFFT_window_corr_factor)
 {
     switch (eFFT_window_corr_factor)
     {
@@ -215,7 +209,7 @@ static float get_selected_corr_factor(eFFT_wind_corr_factor_t eFFT_window_corr_f
     return ESP_FAIL;
 }
 
-esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, eFFT_hw_gain_stage_t eFFT_hw_gain_stage)
+esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, ecep_hw_gain_stage_t eFFT_hw_gain_stage)
 {
     float f32_p0_mv;
 
@@ -250,7 +244,6 @@ esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, eF
 /**
  * @brief Convert complex fft result to real amplitude values.
  *        (See page 103 in "Digital Signal Processing: Fundamentals and Applications 3ed." for the math)
- *        SKRIV AT OUTPUT ER mV fra 0 - 1750 HVIS OUPUTTET IKKE ER DB. OG DB SPL HVIS DET ER
  *
  * @param[in, out] pf32_data Pointer to complex fft result. Calculations are done "in place" (output is placed at same location)
  * @param[in] i32_bin_size amount of complex values in fft result array
@@ -259,7 +252,7 @@ esp_err_t conv_ampl_mv_to_ampl_db_spl(float *pf32_data, int32_t i32_bin_size, eF
  * @param[in] eFFT_window_corr_factor The window correction factor type
  * @return esp_err_t
  */
-static esp_err_t conv_fft_res_to_ampl(float *pf32_data, int32_t i32_bin_size, bool b_result_in_db_spl, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_wind_corr_factor_t eFFT_window_corr_factor)
+static esp_err_t conv_fft_res_to_ampl(float *pf32_data, int32_t i32_bin_size, bool b_result_in_db_spl, ecep_hw_gain_stage_t eFFT_hw_gain_stage, ecep_wind_corr_factor_t eFFT_window_corr_factor)
 {
     // Obtain the selected window-correction-factor for the window in use:
     float f32_selected_wind_corr_factor = get_selected_corr_factor(eFFT_window_corr_factor);
@@ -290,7 +283,7 @@ static esp_err_t conv_fft_res_to_ampl(float *pf32_data, int32_t i32_bin_size, bo
  * @param[in] eFFT_window_corr_factor The window correction factor type
  * @return esp_err_t
  */
-static esp_err_t conv_fft_res_to_pow(float *pf32_data, int32_t i32_bin_size, eFFT_wind_corr_factor_t eFFT_window_corr_factor)
+static esp_err_t conv_fft_res_to_pow(float *pf32_data, int32_t i32_bin_size, ecep_wind_corr_factor_t eFFT_window_corr_factor)
 {
     // Obtain the selected window-correction-factor for the window in use:
     float f32_selected_wind_corr_factor = get_selected_corr_factor(eFFT_window_corr_factor);
@@ -305,33 +298,33 @@ static esp_err_t conv_fft_res_to_pow(float *pf32_data, int32_t i32_bin_size, eFF
     return ESP_OK;
 }
 
-static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
+static esp_err_t generate_window(ecep_window_type_t eFFT_window_type)
 {
     switch (eFFT_window_type)
     {
     case hann:
         // Generate hann window:
-        dsps_wind_hann_f32(gs_af32_wind, i32_N);
+        dsps_wind_hann_f32(gs_af32_wind, DATA_BLOCK_SIZE);
         break;
     case blackman:
         // Generate Blackman window
-        dsps_wind_blackman_f32(gs_af32_wind, i32_N);
+        dsps_wind_blackman_f32(gs_af32_wind, DATA_BLOCK_SIZE);
         break;
     case blackman_harris:
         // Generate Blackman-Harris window
-        dsps_wind_blackman_harris_f32(gs_af32_wind, i32_N);
+        dsps_wind_blackman_harris_f32(gs_af32_wind, DATA_BLOCK_SIZE);
         break;
     case blackman_nuttall:
         // Generate Blackman-Nuttall window
-        dsps_wind_blackman_nuttall_f32(gs_af32_wind, i32_N);
+        dsps_wind_blackman_nuttall_f32(gs_af32_wind, DATA_BLOCK_SIZE);
         break;
     case nuttall:
         // Generate Nuttall window
-        dsps_wind_nuttall_f32(gs_af32_wind, i32_N);
+        dsps_wind_nuttall_f32(gs_af32_wind, DATA_BLOCK_SIZE);
         break;
     case flat_top:
         // Generate Flat-Top window
-        dsps_wind_flat_top_f32(gs_af32_wind, i32_N);
+        dsps_wind_flat_top_f32(gs_af32_wind, DATA_BLOCK_SIZE);
         break;
     default:
         ESP_LOGE(TAG, "ERROR: in generate_window() - Invalid param: eFFT_window_type");
@@ -341,7 +334,7 @@ static esp_err_t generate_window(eFFT_window_type_t eFFT_window_type)
     return ESP_OK;
 }
 
-esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
+esp_err_t fft_wrapper_set_wind(ecep_window_type_t eFFT_window_type)
 {
     if (gs_init_called == false)
     {
@@ -355,7 +348,7 @@ esp_err_t fft_wrapper_set_wind(eFFT_window_type_t eFFT_window_type)
     return ESP_OK;
 }
 
-esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, eFFT_output_form_t eFFT_output_form, eFFT_hw_gain_stage_t eFFT_hw_gain_stage, eFFT_wind_corr_factor_t eFFT_window_corr_factor)
+esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_radix_type, ecep_output_form_t eFFT_output_form, ecep_hw_gain_stage_t eFFT_hw_gain_stage, ecep_wind_corr_factor_t eFFT_window_corr_factor)
 {
     esp_err_t ret;
 
@@ -366,7 +359,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
     }
 
     // Format for fft api and multiply with window function:
-    for (int32_t i = 0; i < i32_N; i++)
+    for (int32_t i = 0; i < DATA_BLOCK_SIZE; i++)
     {
         pf32_data[i] = pf32_data[i] * gs_af32_wind[i];
     }
@@ -376,7 +369,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
     case radix4:
 
         // FFT Radix-4:
-        ret = dsps_fft4r_fc32(pf32_data, i32_N >> 1); // Half size FFT
+        ret = dsps_fft4r_fc32(pf32_data, DATA_BLOCK_SIZE / 2); // Half size FFT
         if (ret != ESP_OK)
         {
             ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);
@@ -384,7 +377,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
         }
 
         // Bit reverse:
-        ret = dsps_bit_rev4r_fc32(pf32_data, i32_N >> 1);
+        ret = dsps_bit_rev4r_fc32(pf32_data, DATA_BLOCK_SIZE / 2);
         if (ret != ESP_OK)
         {
             ESP_LOGE(TAG, "ERROR: Radix4 Bit Reversal failed Error = %i", ret);
@@ -396,7 +389,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
     case radix2:
 
         // FFT Radix-2:
-        ret = dsps_fft2r_fc32(pf32_data, i32_N >> 1); // Half size FFT
+        ret = dsps_fft2r_fc32(pf32_data, DATA_BLOCK_SIZE / 2); // Half size FFT
         if (ret != ESP_OK)
         {
             ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);
@@ -404,7 +397,7 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
         }
 
         // Bit reverse:
-        ret = dsps_bit_rev2r_fc32(pf32_data, i32_N >> 1);
+        ret = dsps_bit_rev2r_fc32(pf32_data, DATA_BLOCK_SIZE / 2);
         if (ret != ESP_OK)
         {
             ESP_LOGE(TAG, "ERROR: Radix4 FFT failed Error = %i", ret);
@@ -420,11 +413,11 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
     }
 
     // Splitting operation:
-    ret = dsps_cplx2real_fc32(pf32_data, i32_N >> 1); /* The output of the FFT is normally "dual sided" (from 0hz to fs(-1 bin)).
-                                                          HOWEVER the output of dsps_cplx2real_fc32 is single sided (from 0hz til fny(-1 bin))
-                                                          (Aka this api does not take the complex conjugate at append it (as descbried in our paper) to get the dual sided fft doing the splitting operation)
-                                                          Source: github quote from a dev of the espressif fft api "If you use dsps_cplx2reC or dsps_cplx2real_fc32 you will have only single sided"
-                                                      */
+    ret = dsps_cplx2real_fc32(pf32_data, DATA_BLOCK_SIZE / 2); /* The output of the FFT is normally "dual sided" (from 0hz to fs(-1 bin)).
+                                                            HOWEVER the output of dsps_cplx2real_fc32 is single sided (from 0hz til fny(-1 bin))
+                                                            (Aka this api does not take the complex conjugate at append it (as descbried in our paper) to get the dual sided fft doing the splitting operation)
+                                                            Source: github quote from a dev of the espressif fft api "If you use dsps_cplx2reC or dsps_cplx2real_fc32 you will have only single sided"
+                                                        */
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "ERROR: Splitting Operation failed = %i", ret);
@@ -435,13 +428,13 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
     switch (eFFT_output_form)
     {
     case ampltitude_mV:
-        conv_fft_res_to_ampl(pf32_data, i32_N >> 1, false, 0, eFFT_window_corr_factor);
+        conv_fft_res_to_ampl(pf32_data, DATA_BLOCK_SIZE / 2, false, 0, eFFT_window_corr_factor);
         break;
     case ampltitude_dB_SPL:
-        conv_fft_res_to_ampl(pf32_data, i32_N >> 1, true, eFFT_hw_gain_stage, eFFT_window_corr_factor);
+        conv_fft_res_to_ampl(pf32_data, DATA_BLOCK_SIZE / 2, true, eFFT_hw_gain_stage, eFFT_window_corr_factor);
         break;
     case power_mV:
-        conv_fft_res_to_pow(pf32_data, i32_N >> 1, eFFT_window_corr_factor);
+        conv_fft_res_to_pow(pf32_data, DATA_BLOCK_SIZE / 2, eFFT_window_corr_factor);
         break;
     default:
         ESP_LOGE(TAG, "ERROR: Invalid argument (eFFT_output_form) in fft_wrapper_run_fft_tech3()");
@@ -452,18 +445,18 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
     return ESP_OK;
 }
 
-esp_err_t fft_wrapper_init_tech3(eFFT_window_type_t eFFT_window_type)
+esp_err_t fft_wrapper_init_tech3(ecep_window_type_t eFFT_window_type)
 {
     esp_err_t ret;
 
-    ret = dsps_fft2r_init_fc32(NULL, i32_N >> 1); // Half size FFT (amount of complex values)
+    ret = dsps_fft2r_init_fc32(NULL, DATA_BLOCK_SIZE / 2); // Half size FFT (amount of complex values)
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "ERROR: Not possible to initialize FFT2R. Error = %i", ret);
         return ret;
     }
 
-    ret = dsps_fft4r_init_fc32(NULL, i32_N >> 1); // Half size FFT (amount of complex values)
+    ret = dsps_fft4r_init_fc32(NULL, DATA_BLOCK_SIZE / 2); // Half size FFT (amount of complex values)
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "ERROR: Not possible to initialize FFT4R. Error = %i", ret);

@@ -3,14 +3,6 @@
 
 #include "esp_adc/adc_continuous.h" // For ADC atten types
 
-// Burde man måske køre radix 2? Så kan man have DATA_BLOCK_SIZE 4096 (måske)
-// og så bare smid hver anden data blok væk, så esp'en har tid til at lave fft
-//  Opøsning:
-//  Ved radix4 (DATA_BLOCK_SIZE = 2048):
-//  Hver bin index er  BW/(DATA_BLOCK_SIZE/2)  -->  (16000-125)/(2048/2) = 15.503... Hz
-// Ved radix2 (DATA_BLOCK_SIZE = 4096):
-// Hver bin index er  (16000-125)/(2048/2) = 7.751... Hz
-
 #define DATA_BLOCK_SIZE 8192 // Size of 1 block of samples in amount of elements
                              /* Requirements for this value:
                              
@@ -26,19 +18,14 @@
                                       are printed at the end of app_main() )
                              */
 
-// SKRIV I RAPPORTEN HVORFOR VI VALGTE 2048 (hvis den næste 4^r værdi bruges, 8192, ville esp'en løbe tør for DRAM
-// (Fordi vi bruger så mange 32 bit float arrays af størrelsen DATA_BLOCK_SIZE)
-// Update: Dette er outdated info...
-
-// SKRIV OGSÅ I RAPOORTEN AF DEN HER VÆRDI SKAL VÆRE OVER 600 (se min maple fil hvor jeg berenger det) FOR AT FÅ EN HEL PERIODE AF DEN LAVESTE FREKVENS MED
-// Update: Ved ikke om det er nyttig viden. måske er det
-
-// MÅSKE LAV EN FFT RES LENGTH SOM ER DATA_BLOCK_SIZE / 2???
-// Måske lav en DATA_POINT / 2 define til alt fft stuff
-// Og kald den SINGLE_SIDED_FFT_REAL_RES_SIZE eller noget lignene
+// NESP. BEREGN VORES FFT FREKVENS OPLØSNING TIL RAPPORTEN. EKS MED DATA_BLOCK_SIZE = 4095:
+// Hver bin index er  (16000-125)/(4095/2) = 7.751... Hz
+// MÅSKE OGSÅ SKRIV I RAPOORTEN AF DEN HER VÆRDI SKAL VÆRE OVER 600 (se min maple fil hvor jeg berenger det) FOR AT FÅ EN HEL PERIODE AF DEN LAVESTE FREKVENS MED
 
 #define ADC_SAMPLING_FREQ 80 * 1000 // see soc caps file for max value (limited by the internal ADC's of the ESP32-S3)
 #define ADC_ATTEN_DB      ADC_ATTEN_DB_6
+
+#define ASA_SPECIFICATION_MIN_FREQ 125 // Specifcation for the smallest frequency in Hz that the Audio Signal Analyzer supports
 
 #define GPIO_HIGH 1
 #define GPIO_LOW  0

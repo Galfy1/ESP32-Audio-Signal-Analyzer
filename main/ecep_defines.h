@@ -3,22 +3,32 @@
 
 #include "common_defines.h"
 
+// ECEP: External Command Event Protocol
+
+// ######## ECEP HEADER ########
+// | Packet Type | Command/event ID | Packet Length (low byte) | Packet Length (high byte) |
+//    (1 byte)         (1 byte)                 (1 byte)                    (1 byte)
+
+// ######## ECEP PACKAGE ########
+// |   Header   |   Cmd/Evt param struct   |   Bulk data   |
+//    (4 bytes)           (differ)              (differ)
+
 #define ECEP_HEADER_LEN 4 // Header length In bytes
 
-#define ECEP_MAX_CMD_PACKET_LEN 1000                                                 // Max packet length for an event packet in bytes.
-                                                                                     /* (value is arbitrarily chosen. Is simply has to be at least the size of the largest command package.
-                                                                                        No command package is currently over 1000 bytes in size.) */
-#define ECEP_MAX_EVNT_PACKET_LEN ECEP_HEADER_LEN + (sizeof(float) * DATA_BLOCK_SIZE) // Max packet length for an event packet in bytes.
-                                                                                     // (chosen by biggest Event. In this case: Left/Right ADC Raw data event)
+#define ECEP_MAX_CMD_PACKET_LEN 1000                                                   // Max packet length for an event packet in bytes.
+                                                                                       /* (value is arbitrarily chosen. Is simply has to be at least the size of the largest command package.
+                                                                                          No command package is currently over 1000 bytes in size.) */
+#define ECEP_MAX_EVNT_PACKET_LEN (ECEP_HEADER_LEN + (sizeof(float) * DATA_BLOCK_SIZE)) // Max packet length for an event packet in bytes.
+                                                                                       // (chosen by biggest Event. In this case: Left/Right ADC Raw data event)
 
 #define ECEP_PACKET_TYPE 0x42
 
-#define TX_PACKET_TYPE_BYTE          0
-#define TX_PACKET_CMD_EVNT_BYTE      1
-#define TX_PACKET_PACK_LEN_LOW_BYTE  2
-#define TX_PACKET_PACK_LEN_HIGH_BYTE 3
+#define ECEP_HEADER_PACKET_TYPE_BYTE   0
+#define ECEP_HEADER_CMD_EVNT_BYTE      1
+#define ECEP_HEADER_PACK_LEN_LOW_BYTE  2
+#define ECEP_HEADER_PACK_LEN_HIGH_BYTE 3
 
-// ---------------------------- Command/Event IDs  ----------------------------
+// ########################## Command/Event IDs  ##########################
 
 // Command IDs
 #define ECEP_CMD_FETCH_FFT            0x01
@@ -57,9 +67,7 @@
 #define ECEP_EVNT_PR_DEF_STATE       0x0D
 #define ECEP_EVNT_PONG               0x0E
 
-// ------------------------- Params (enums and structs)  -------------------------
-
-// DE SKAL MÅSKE HAVE ECEP PREFIX FORAN SIG:
+// ######################## Params (enums and structs)  ########################
 
 // Parameter enums (for both commands and events)
 typedef enum
@@ -67,14 +75,14 @@ typedef enum
     left  = 1,
     right = 2,
     both  = 3,
-} eAudio_channel_t;
+} ecep_audio_channel_t;
 
 typedef enum
 {
     ampltitude_mV     = 1, // return result as amplitude in mV
     ampltitude_dB_SPL = 2, // return result as amplitude in dB SPL
     power_mV          = 3, // return result as power in mV
-} eFFT_output_form_t;
+} ecep_output_form_t;
 
 typedef enum
 {
@@ -84,26 +92,26 @@ typedef enum
     blackman_nuttall = 4,
     nuttall          = 5,
     flat_top         = 6,
-} eFFT_window_type_t;
+} ecep_window_type_t;
 
 typedef enum
 {
     none      = 1,
     amplitude = 2,
     energy    = 3,
-} eFFT_wind_corr_factor_t;
+} ecep_wind_corr_factor_t;
 
 typedef enum
 {
     up_to_90dB_SPL  = 1,
     up_to_120dB_SPL = 2,
-} eFFT_hw_gain_stage_t; // Skal måske ikke hede FFT_ foran, hvis den ikke er en del af FFT settings.
+} ecep_hw_gain_stage_t;
 
 typedef enum
 {
     norm_open   = 1,
     norm_closed = 2,
-} eRelay_state_t;
+} ecep_relay_state_t;
 
 typedef enum
 {
@@ -111,69 +119,60 @@ typedef enum
     ECEP_FAIL              = 2,
     ECEP_ERR_INVALID_PARAM = 3,
     ECEP_ERR_INVALID_CMD   = 4,
-    // ECEP_ERR_INVALID_PACKET_LEN = 4,  // Kan ikke bruges (da vi resetter for at prøve at fixe problemet) aka bare slet
-    ECEP_ERR_UNKNOWN = 5,
-} eCMD_status_t;
+    ECEP_ERR_UNKNOWN       = 5,
+} ecep_cmd_status_t;
 
 // Parameter structs (for both commands and events):
 typedef struct
 {
-
-    eFFT_output_form_t      fft_output_format;
-    eFFT_window_type_t      fft_window;
+    ecep_output_form_t      fft_output_format;
+    ecep_window_type_t      fft_window;
     uint32_t                u32_fft_res_avg_count;
-    eFFT_wind_corr_factor_t fft_corr_factor;
-
-} sFFT_stgs_t;
+    ecep_wind_corr_factor_t fft_corr_factor;
+} ecep_fft_settings_t;
 
 typedef struct
 {
+    uint8_t           u8_parent_cmd_id;
+    ecep_cmd_status_t status;
+} ecep_status_event_t;
 
-    uint8_t       u8_parent_cmd_id;
-    eCMD_status_t status;
+// #################### Unions/Structs used for Internal task communication ####################
 
-} sStatus_event_t;
-
-// ---------------- Unions/Structs used for Internal task communication ----------------
-
-typedef union uCommand_parameters
+typedef union
 {
-    eAudio_channel_t        channel;
-    eFFT_output_form_t      fft_output_format;
-    eFFT_window_type_t      fft_window;
+    ecep_audio_channel_t    channel;
+    ecep_output_form_t      fft_output_format;
+    ecep_window_type_t      fft_window;
     uint32_t                u32_fft_res_avg_count;
-    eFFT_wind_corr_factor_t fft_win_corr_factor;
-    eFFT_hw_gain_stage_t    range;    // Måske hedde mic_range i stedet?
-    uint32_t                u32_time; // Skal måske hedde fft duration eller noget lignene, så man kan se den hører til ECEP_EVNT_FFT_TOT_DUR. Eller bruges den til andre ting også? svar: ja det gør den vidst
-    eRelay_state_t          relay_state;
-} uCMD_params_t;
+    ecep_wind_corr_factor_t fft_win_corr_factor;
+    ecep_hw_gain_stage_t    mic_range;
+    uint32_t                u32_time_ms;
+    ecep_relay_state_t      relay_state;
+} ecep_cmd_params_t;
 
-typedef union uEvent_parameters
+typedef union
 {
-    sStatus_event_t      status_event; // Burde den ikke hedde command status? Det er vel underforstået at det er et event siden den ligger i en EVNT_param union. (også så den matcher event ID navnet)
-    sFFT_stgs_t          FFT_stgs;
-    uint32_t             u32_time; // Time in ms // Skal måske hedde fft duration eller noget lignene, så man kan se den hører til ECEP_EVNT_FFT_TOT_DUR. Eller bruges den til andre ting også?
+    ecep_status_event_t  command_status;
+    ecep_fft_settings_t  FFT_stgs;
+    uint32_t             u32_time_ms;
     uint32_t             u32_cen_freq_hz;
     float                f32_cen_freq_amp;
-    eFFT_hw_gain_stage_t range; // Måske hedde mic_range i stedet?
-    eRelay_state_t       pr_default;
-} uEVNT_params_t;
+    ecep_hw_gain_stage_t mic_range;
+    ecep_relay_state_t   pr_default;
+} ecep_event_params_t;
 
 // Command/Event structs used as elements for the command/event queues:
 typedef struct
 {
-
-    uint8_t       u8_id;
-    uCMD_params_t param;
-
-} sIntern_command_setup_t;
+    uint8_t           u8_id;
+    ecep_cmd_params_t param;
+} ecep_internal_cmd_setup_t;
 
 typedef struct
 {
-
-    uint8_t        u8_id;
-    uEVNT_params_t param;
-
-} sIntern_event_setup_t;
+    uint8_t             u8_id;
+    ecep_event_params_t param;
+} ecep_internal_event_setup_t;
 
 #endif /*ECEP_DEFINES_H_INCLUDED */
