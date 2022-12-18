@@ -415,8 +415,8 @@ esp_err_t fft_wrapper_run_fft_tech3(float *pf32_data, eFFT_radix_type_t eFFT_rad
     // Splitting operation:
     ret = dsps_cplx2real_fc32(pf32_data, DATA_BLOCK_SIZE / 2); /* The output of the FFT is normally "dual sided" (from 0hz to fs(-1 bin)).
                                                             HOWEVER the output of dsps_cplx2real_fc32 is single sided (from 0hz til fny(-1 bin))
-                                                            (Aka this api does not take the complex conjugate at append it (as descbried in our paper) to get the dual sided fft doing the splitting operation)
-                                                            Source: github quote from a dev of the espressif fft api "If you use dsps_cplx2reC or dsps_cplx2real_fc32 you will have only single sided"
+                                                            Sources: Looking at the splitting operation expressions in DSP books.
+                                                                     github quote from a dev of the espressif fft api "If you use dsps_cplx2reC or dsps_cplx2real_fc32 you will have only single sided".
                                                         */
     if (ret != ESP_OK)
     {
