@@ -68,7 +68,6 @@ static float    gs_f32_R_cent_freq_val;
 __attribute__((aligned(16))) static float gs_af32_adc1_temp_buf[DATA_BLOCK_SIZE] = {0};
 __attribute__((aligned(16))) static float gs_af32_adc2_temp_buf[DATA_BLOCK_SIZE] = {0};
 
-// NESP IKKE TESTET:
 static void calc_fft_duration_ms()
 {
     gs_u32_total_fft_dur_ms = (1.0 / ADC_SAMPLING_FREQ) * DATA_BLOCK_SIZE * gs_i32_fft_avg_max_cnt * 1000.0; // *1000 to get in ms
@@ -114,7 +113,6 @@ static void find_cent_freq(float *array, int32_t array_size, uint32_t *p_cent_fr
                                                                                       This is because the half sized FFT result is single sided and goes from 0 - fny. The Bin_nr to Bin_freq expression uses the range to fs (not fny),
                                                                                       so we use the full DATA_BLOCK_SIZE in the expression)
                                                                                   */
-                                                                                                  // NESP (se (4.26) på side 103 i "Digital Signal Processing: Fundamentals..." bog for denne formel)
 }
 
 void dsp_ecep_handler_task()

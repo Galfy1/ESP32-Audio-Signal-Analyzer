@@ -18,10 +18,6 @@
                                       are printed at the end of app_main() )
                              */
 
-// NESP. BEREGN VORES FFT FREKVENS OPLØSNING TIL RAPPORTEN. EKS MED DATA_BLOCK_SIZE = 4095:
-// Hver bin index er  (16000-125)/(4095/2) = 7.751... Hz
-// MÅSKE OGSÅ SKRIV I RAPOORTEN AF DEN HER VÆRDI SKAL VÆRE OVER 600 (se min maple fil hvor jeg berenger det) FOR AT FÅ EN HEL PERIODE AF DEN LAVESTE FREKVENS MED
-
 #define ADC_SAMPLING_FREQ 80 * 1000 // see soc caps file for max value (limited by the internal ADC's of the ESP32-S3)
 #define ADC_ATTEN_DB      ADC_ATTEN_DB_6
 

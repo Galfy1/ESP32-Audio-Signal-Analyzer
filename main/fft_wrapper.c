@@ -60,13 +60,6 @@ __attribute__((aligned(16))) static float gs_af32_wind[DATA_BLOCK_SIZE];
 
 static ecep_window_type_t gs_curr_selected_wind;
 
-// NESP SKRIV KORT OM I RAPPORTEN HVORFOR VI BRUGER WINDOWS
-// DE nævner det her:
-// https://www.sjsu.edu/people/burford.furman/docs/me120/FFT_tutorial_NI.pdf
-// MÅSKE FIND AFSNITTET I DSP BOGEN MED DET, OG SE HVAD DE HAR AT SIGE
-// TROR DET STÅR PÅ SIDE 112 I DEN NYE DSP BOG
-// BARE SKRIV SUPER KORT OM DET
-
 static float mean_of_float_array(float *p_f32_array, int32_t i32_array_size_in_elements)
 {
     float f32_sum = 0;
